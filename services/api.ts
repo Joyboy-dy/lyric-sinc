@@ -1,7 +1,9 @@
 import { AlignmentResult } from '../types';
 
-// This is the URL where the python backend is expected to run
-const API_URL = 'http://localhost:8000';
+// API URL: Use environment variable or fallback to localhost
+// In production, set VITE_API_URL in .env.local to your Render URL
+// Example: VITE_API_URL=https://lyric-sinc-backend.onrender.com
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export class AlignmentService {
   /**
@@ -75,7 +77,7 @@ export class AlignmentService {
         date.setMilliseconds(seconds * 1000);
         return date.toISOString().substr(11, 12).replace('.', ',');
       };
-      
+
       return `${index + 1}\n${formatTime(seg.start)} --> ${formatTime(seg.end)}\n${seg.text}\n`;
     }).join('\n');
 

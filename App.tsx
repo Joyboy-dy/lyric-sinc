@@ -42,9 +42,9 @@ const App: React.FC = () => {
         // The service call waits for the whole process
         setProcessingState({ step: 'transcribing', message: 'Server processing: Transcribing & Aligning...' });
         if (file) {
-            data = await AlignmentService.alignAudio(file, lyrics);
+          data = await AlignmentService.alignAudio(file, lyrics);
         } else {
-            throw new Error("No file provided");
+          throw new Error("No file provided");
         }
       }
 
@@ -52,9 +52,9 @@ const App: React.FC = () => {
       setProcessingState({ step: 'completed', message: 'Done!' });
     } catch (error) {
       console.error(error);
-      setProcessingState({ 
-        step: 'error', 
-        message: error instanceof Error ? error.message : 'An unknown error occurred' 
+      setProcessingState({
+        step: 'error',
+        message: error instanceof Error ? error.message : 'An unknown error occurred'
       });
     }
   };
@@ -82,20 +82,20 @@ const App: React.FC = () => {
               <p className="text-xs text-slate-500 font-mono tracking-wide">WHISPERX POWERED</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
-             <div className="flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
-                <input 
-                  type="checkbox" 
-                  id="mockMode" 
-                  checked={useMock} 
-                  onChange={(e) => setUseMock(e.target.checked)}
-                  className="rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500/50"
-                />
-                <label htmlFor="mockMode" className="text-xs text-slate-400 cursor-pointer select-none">
-                  Demo Mode (No Backend)
-                </label>
-             </div>
+            <div className="flex items-center space-x-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
+              <input
+                type="checkbox"
+                id="mockMode"
+                checked={useMock}
+                onChange={(e) => setUseMock(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500/50"
+              />
+              <label htmlFor="mockMode" className="text-xs text-slate-400 cursor-pointer select-none">
+                Demo Mode (No Backend)
+              </label>
+            </div>
           </div>
         </div>
       </header>
@@ -103,20 +103,20 @@ const App: React.FC = () => {
       {/* Main Content */}
       <main className="flex-grow p-4 md:p-8 overflow-hidden">
         <div className="max-w-7xl mx-auto h-full flex flex-col space-y-6">
-          
+
           {/* Top Section: Inputs */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-auto lg:h-[400px]">
-            
+
             {/* Left: Audio & Controls */}
             <div className="flex flex-col space-y-4">
               <div className="flex-grow">
-                <DropZone 
-                  selectedFile={file} 
-                  onFileSelected={setFile} 
-                  onClear={() => setFile(null)} 
+                <DropZone
+                  selectedFile={file}
+                  onFileSelected={setFile}
+                  onClear={() => setFile(null)}
                 />
               </div>
-              
+
               {/* Info Box */}
               <div className="bg-slate-800/50 border border-slate-800 rounded-xl p-4">
                 <div className="flex items-start space-x-3">
@@ -141,52 +141,52 @@ const App: React.FC = () => {
 
           {/* Action Area */}
           <div className="flex flex-col items-center justify-center space-y-4 py-2">
-             <button
-                onClick={handleGenerate}
-                disabled={(!file && !useMock) || processingState.step !== 'idle'}
-                className={`
+            <button
+              onClick={handleGenerate}
+              disabled={(!file && !useMock) || processingState.step !== 'idle'}
+              className={`
                   relative px-8 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-200
                   ${(!file && !useMock) || processingState.step !== 'idle'
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                    : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-indigo-500/25 hover:-translate-y-0.5'
-                  }
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-indigo-500/25 hover:-translate-y-0.5'
+                }
                 `}
-             >
-                {processingState.step === 'idle' ? 'Generate Synchronized SRT' : 'Processing...'}
-             </button>
-             
-             {processingState.step === 'error' && (
-                <div className="flex items-center space-x-3 text-red-400 bg-red-400/10 px-4 py-2 rounded-lg max-w-lg">
-                  <AlertCircle size={20} className="flex-shrink-0" />
-                  <span className="text-sm">{processingState.message}</span>
-                  {processingState.message?.includes("Demo Mode") && (
-                    <button 
-                      onClick={() => setUseMock(true)}
-                      className="ml-auto text-xs bg-red-500/20 hover:bg-red-500/30 text-red-200 px-2 py-1 rounded transition-colors flex items-center space-x-1 whitespace-nowrap"
-                    >
-                      <RefreshCw size={12} />
-                      <span>Enable Demo</span>
-                    </button>
-                  )}
-                </div>
-             )}
+            >
+              {processingState.step === 'idle' ? 'Generate Synchronized SRT' : 'Processing...'}
+            </button>
+
+            {processingState.step === 'error' && (
+              <div className="flex items-center space-x-3 text-red-400 bg-red-400/10 px-4 py-2 rounded-lg max-w-lg">
+                <AlertCircle size={20} className="flex-shrink-0" />
+                <span className="text-sm">{processingState.message}</span>
+                {processingState.message?.includes("Demo Mode") && (
+                  <button
+                    onClick={() => setUseMock(true)}
+                    className="ml-auto text-xs bg-red-500/20 hover:bg-red-500/30 text-red-200 px-2 py-1 rounded transition-colors flex items-center space-x-1 whitespace-nowrap"
+                  >
+                    <RefreshCw size={12} />
+                    <span>Enable Demo</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Pipeline Visualization */}
           {processingState.step !== 'idle' && processingState.step !== 'error' && (
-             <PipelineSteps state={processingState} />
+            <PipelineSteps state={processingState} />
           )}
 
           {/* Results Section */}
           {result && (
             <div className="flex-grow min-h-[400px] animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <SrtOutput result={result} />
+              <SrtOutput result={result} />
             </div>
           )}
 
         </div>
       </main>
-      
+
       {/* Footer Instructions */}
       <footer className="py-6 text-center text-slate-600 text-xs border-t border-slate-800/50 mt-8">
         <p>To run the backend: <code className="bg-slate-800 px-1 py-0.5 rounded text-slate-400">uvicorn backend_server:app --reload</code></p>

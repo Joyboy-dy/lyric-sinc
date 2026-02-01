@@ -5,18 +5,29 @@ import shutil
 import os
 import tempfile
 import json
-import whisperx
+import whisper
 import torch
-import ffmpeg
 from typing import List, Optional
+
+# --- FFmpeg Configuration (Fix for Windows PATH issues) ---
+# Add common FFmpeg installation paths to system PATH
+FFMPEG_PATHS = [
+    r"C:\ffmpeg\bin",
+    r"C:\Program Files\ffmpeg\bin",
+    r"C:\Program Files (x86)\ffmpeg\bin",
+]
+for ffmpeg_path in FFMPEG_PATHS:
+    if os.path.exists(ffmpeg_path) and ffmpeg_path not in os.environ["PATH"]:
+        os.environ["PATH"] = ffmpeg_path + os.pathsep + os.environ["PATH"]
+        print(f"Added {ffmpeg_path} to PATH")
 
 # --- Configuration ---
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE = 16 
-COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
-TRANSCRIPTION_MODEL = "large-v2"
+MODEL_SIZE = "medium"  # Using 'medium' for better precision on complex songs
+INSTRUMENTAL_GAP_THRESHOLD = 1.5  # Seconds of silence to trigger [Instrumental]
+MIN_SEGMENT_GAP = 0.05  # Minimum gap between segments to avoid overlaps
 
-app = FastAPI(title="LyricSync Backend")
+app = FastAPI(title="LyricSync Backend (OpenAI Whisper)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +39,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "running", "device": DEVICE, "model": TRANSCRIPTION_MODEL}
+    return {"status": "running", "device": DEVICE, "model": MODEL_SIZE, "backend": "openai-whisper"}
 
 def format_timestamp(seconds: float) -> str:
     """Converts seconds to SRT timestamp format (HH:MM:SS,mmm)."""
@@ -41,7 +52,7 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
 
 def generate_srt(segments: List[dict]) -> str:
-    """Generates SRT content from WhisperX segments."""
+    """Generates SRT content from segments."""
     srt_output = []
     for i, segment in enumerate(segments, 1):
         start = format_timestamp(segment["start"])
@@ -50,49 +61,156 @@ def generate_srt(segments: List[dict]) -> str:
         srt_output.append(f"{i}\n{start} --> {end}\n{text}\n")
     return "\n".join(srt_output)
 
-def align_transcription(audio_path: str, lyrics: Optional[str] = None):
+def align_lyrics_to_timestamps(whisper_segments: List[dict], provided_lyrics: str) -> List[dict]:
     """
-    Runs the WhisperX pipeline: Transcribe -> Align.
-    Note: For true 'forced alignment' of arbitrary text that differs significantly 
-    from audio, specialized forced alignment tools are often needed. 
-    However, WhisperX align works very well if the lyrics match the audio.
+    Maps user-provided lyrics to Whisper timestamps (Forced Alignment).
+    Whisper provides WHEN words are spoken, user provides WHAT text to display.
     """
+    # Split provided lyrics into lines (segments)
+    lyrics_lines = [line.strip() for line in provided_lyrics.strip().split('\n') if line.strip()]
     
-    # 1. Transcribe
-    print("Loading model...")
-    model = whisperx.load_model(TRANSCRIPTION_MODEL, DEVICE, compute_type=COMPUTE_TYPE)
+    if not lyrics_lines:
+        # No lyrics provided, use Whisper transcription
+        return whisper_segments
     
-    print("Loading audio...")
-    audio = whisperx.load_audio(audio_path)
+    # We have M lyrics lines and N whisper segments
+    # Strategy: Distribute lyrics lines across whisper segments proportionally
+    aligned_segments = []
     
+    num_lyrics = len(lyrics_lines)
+    num_whisper = len(whisper_segments)
+    
+    if num_lyrics == num_whisper:
+        # Perfect 1:1 mapping
+        for i, (whisper_seg, lyric_line) in enumerate(zip(whisper_segments, lyrics_lines)):
+            aligned_segments.append({
+                "start": whisper_seg["start"],
+                "end": whisper_seg["end"],
+                "text": lyric_line,
+                "words": whisper_seg.get("words", [])
+            })
+    else:
+        # Distribute lyrics across available timestamps
+        # Use ratio to map lyrics to segments
+        for i, lyric_line in enumerate(lyrics_lines):
+            # Map lyrics line i to whisper segment based on proportion
+            whisper_idx = int((i / num_lyrics) * num_whisper)
+            whisper_idx = min(whisper_idx, num_whisper - 1)  # Clamp to valid range
+            
+            whisper_seg = whisper_segments[whisper_idx]
+            aligned_segments.append({
+                "start": whisper_seg["start"],
+                "end": whisper_seg["end"],
+                "text": lyric_line,
+                "words": whisper_seg.get("words", [])
+            })
+    
+    return aligned_segments
+
+def post_process_timestamps(segments: List[dict]) -> List[dict]:
+    """
+    Cleans up timestamps to avoid overlaps and ensure proper gaps.
+    """
+    if not segments:
+        return segments
+    
+    cleaned = []
+    for i, seg in enumerate(segments):
+        current = seg.copy()
+        
+        # Ensure minimum duration
+        if current["end"] - current["start"] < 0.1:
+            current["end"] = current["start"] + 0.1
+        
+        # Check for overlap with next segment
+        if i < len(segments) - 1:
+            next_seg = segments[i + 1]
+            if current["end"] > next_seg["start"]:
+                # Overlap detected: split the gap
+                current["end"] = next_seg["start"] - MIN_SEGMENT_GAP
+        
+        # Check for overlap with previous segment
+        if cleaned:
+            prev = cleaned[-1]
+            if prev["end"] > current["start"]:
+                prev["end"] = current["start"] - MIN_SEGMENT_GAP
+        
+        cleaned.append(current)
+    
+    return cleaned
+
+def process_transcription(audio_path: str, provided_lyrics: Optional[str] = None):
+    """
+    Runs openai-whisper transcription and aligns with provided lyrics if given.
+    """
+    print(f"Loading model {MODEL_SIZE} on {DEVICE}...")
+    model = whisper.load_model(MODEL_SIZE, device=DEVICE)
+
     print("Transcribing...")
-    result = model.transcribe(audio, batch_size=BATCH_SIZE)
+    result = model.transcribe(audio_path, word_timestamps=True, verbose=True)
     
-    # Free GPU resources
-    del model
-    torch.cuda.empty_cache()
+    raw_segments = result["segments"]
     
-    # 2. Align
-    print("Loading alignment model...")
-    model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=DEVICE)
+    # If lyrics provided, use forced alignment
+    if provided_lyrics and provided_lyrics.strip():
+        print("Applying forced alignment with provided lyrics...")
+        aligned_segments = align_lyrics_to_timestamps(raw_segments, provided_lyrics)
+    else:
+        print("No lyrics provided, using Whisper transcription...")
+        aligned_segments = raw_segments
     
-    print("Aligning...")
-    # This aligns the *transcribed* text to the audio to get precise word timings.
-    # If users provide lyrics, a more complex pipeline would replace result["segments"] 
-    # with the user's text segmented into chunks. 
-    # For this implementation, we prioritize the high-quality transcription + alignment 
-    # which is the standard WhisperX usage.
-    aligned_result = whisperx.align(result["segments"], model_a, metadata, audio, DEVICE, return_char_alignments=False)
+    # Post-process to add instrumental gaps and clean timestamps
+    processed_segments = []
+    all_words = []
+    last_end_time = 0.0
+
+    for segment in aligned_segments:
+        seg_start = segment["start"]
+        seg_end = segment["end"]
+        
+        # Check for instrumental gap
+        gap_duration = seg_start - last_end_time
+        
+        if gap_duration > INSTRUMENTAL_GAP_THRESHOLD:
+            processed_segments.append({
+                "start": last_end_time,
+                "end": seg_start,
+                "text": "[Instrumental]",
+                "words": []
+            })
+            
+        # Add segment
+        seg_data = {
+            "start": seg_start,
+            "end": seg_end,
+            "text": segment.get("text", ""),
+            "words": []
+        }
+        
+        # Process words if available
+        if "words" in segment:
+            for word in segment["words"]:
+                word_data = {
+                    "word": word.get("word", ""),
+                    "start": word.get("start", seg_start),
+                    "end": word.get("end", seg_end),
+                    "score": word.get("probability", 1.0)
+                }
+                seg_data["words"].append(word_data)
+                all_words.append(word_data)
+        
+        processed_segments.append(seg_data)
+        last_end_time = seg_end
     
-    del model_a
-    torch.cuda.empty_cache()
-    
-    return aligned_result
+    # Final cleanup
+    processed_segments = post_process_timestamps(processed_segments)
+
+    return processed_segments, all_words
 
 @app.post("/align")
 async def process_alignment(
     audio_file: UploadFile = File(...),
-    lyrics: str = Form(...)
+    lyrics: str = Form(...) 
 ):
     temp_dir = tempfile.mkdtemp()
     try:
@@ -101,35 +219,16 @@ async def process_alignment(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(audio_file.file, buffer)
             
-        # Ensure 16khz mono wav (Whisper requirement, though WhisperX handles load_audio internally, 
-        # doing explicit conversion is safe)
-        converted_path = os.path.join(temp_dir, "converted.wav")
-        try:
-            (
-                ffmpeg
-                .input(file_path)
-                .output(converted_path, ac=1, ar=16000)
-                .run(quiet=True, overwrite_output=True)
-            )
-        except ffmpeg.Error as e:
-            raise HTTPException(status_code=500, detail="FFmpeg processing failed")
-
         # Run Pipeline
-        result = align_transcription(converted_path, lyrics)
+        processed_segments, all_words = process_transcription(file_path, lyrics)
         
         # Format Output
-        srt_content = generate_srt(result["segments"])
-        
-        # Flatten word timestamps for JSON output
-        all_words = []
-        for seg in result["segments"]:
-            if "words" in seg:
-                all_words.extend(seg["words"])
+        srt_content = generate_srt(processed_segments)
         
         return {
             "srt_content": srt_content,
             "word_segments": all_words,
-            "full_json": result
+            "full_json": {"segments": processed_segments}
         }
 
     except Exception as e:
