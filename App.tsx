@@ -124,8 +124,8 @@ const App: React.FC = () => {
                   <div className="text-sm text-slate-400 space-y-1">
                     <p>Pipeline configuration:</p>
                     <ul className="list-disc list-inside text-xs text-slate-500 ml-1">
-                      <li>Model: Whisper Large V2</li>
-                      <li>Alignment: Wav2Vec2 Large</li>
+                      <li>Engine: Faster-Whisper (CPU)</li>
+                      <li>Alignment: Word-level timestamps</li>
                       <li>Output: Millisecond-accurate SRT</li>
                     </ul>
                   </div>

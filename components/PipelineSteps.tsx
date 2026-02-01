@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Loader2, FileAudio, FileText, AlignCenter, FileCheck } from 'lucide-react';
 import { ProcessingState, ProcessingStep } from '../types';
 
@@ -14,12 +14,45 @@ const steps = [
 ];
 
 const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [estimatedMessage, setEstimatedMessage] = useState('');
+
+  // Reset timer when processing starts
+  useEffect(() => {
+    if (state.step === 'uploading' || state.step === 'transcribing' || state.step === 'aligning') {
+      setElapsedTime(0);
+      const interval = setInterval(() => {
+        setElapsedTime(prev => prev + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [state.step]);
+
+  // Update estimated messages based on elapsed time
+  useEffect(() => {
+    if (state.step === 'transcribing' || state.step === 'aligning') {
+      if (elapsedTime < 10) {
+        setEstimatedMessage('Envoi au serveur...');
+      } else if (elapsedTime < 30) {
+        setEstimatedMessage('Chargement du modèle...');
+      } else if (elapsedTime < 60) {
+        setEstimatedMessage('Transcription en cours...');
+      } else if (elapsedTime < 120) {
+        setEstimatedMessage('Alignement des paroles...');
+      } else {
+        setEstimatedMessage('Finalisation...');
+      }
+    }
+  }, [elapsedTime, state.step]);
+
   // Determine current active index based on state
   let activeIndex = -1;
   if (state.step === 'uploading') activeIndex = 0;
   if (state.step === 'transcribing') activeIndex = 1;
   if (state.step === 'aligning') activeIndex = 2;
   if (state.step === 'completed') activeIndex = 3;
+
+  const isProcessing = state.step === 'transcribing' || state.step === 'aligning';
 
   return (
     <div className="w-full py-6">
@@ -68,20 +101,36 @@ const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
         })}
       </div>
 
-      {/* Progress Bar */}
+      {/* Indeterminate Progress Bar (only when processing) */}
       <div className="max-w-3xl mx-auto mt-6">
-        <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden shadow-inner">
-          <div
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out"
-            style={{ width: `${Math.max(5, (activeIndex / (steps.length - 1)) * 100)}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-slate-500">
-          <span>Progression</span>
-          <span className="font-mono font-bold text-indigo-400">
-            {Math.round((activeIndex / (steps.length - 1)) * 100)}%
-          </span>
-        </div>
+        {isProcessing ? (
+          <>
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden shadow-inner relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-[shimmer_2s_ease-in-out_infinite] opacity-80"
+                style={{
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s ease-in-out infinite'
+                }}
+              />
+            </div>
+            <div className="flex justify-between mt-2 text-xs">
+              <span className="text-slate-400">{estimatedMessage}</span>
+              <span className="font-mono font-bold text-indigo-400">
+                {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+              </span>
+            </div>
+          </>
+        ) : state.step === 'completed' ? (
+          <>
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden shadow-inner">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-full" />
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-slate-500">
+              <span>Terminé</span>
+              <span className="font-mono font-bold text-green-400">100%</span>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {state.message && (
@@ -89,6 +138,18 @@ const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
           {state.message}...
         </div>
       )}
+
+      {/* Add shimmer animation CSS */}
+      <style>{`
+        @keyframes shimmer {
+          0%, 100% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+        }
+      `}</style>
     </div>
   );
 };
