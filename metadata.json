@@ -1,0 +1,5 @@
+{
+  "name": "LyricSync - Phonetic Aligner",
+  "description": "Precise phonetic alignment of audio and lyrics using WhisperX to generate word-level SRT subtitles.",
+  "requestFramePermissions": []
+}
