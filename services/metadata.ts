@@ -1,46 +1,40 @@
-import jsmediatags from 'jsmediatags';
+import * as musicMetadata from 'music-metadata-browser';
 
 export interface AudioMetadata {
     artist: string | null;
     title: string | null;
     album: string | null;
     year: string | null;
-    duration: number | null; // in seconds
+    duration: number | null;
 }
 
 /**
- * Extract metadata from an audio file using jsmediatags
+ * Extract metadata from an audio file using music-metadata-browser
  */
 export async function extractMetadata(file: File): Promise<AudioMetadata> {
-    return new Promise((resolve, reject) => {
-        jsmediatags.read(file, {
-            onSuccess: (tag) => {
-                const tags = tag.tags;
-                resolve({
-                    artist: tags.artist || null,
-                    title: tags.title || null,
-                    album: tags.album || null,
-                    year: tags.year || null,
-                    duration: null, // ID3 doesn't always have duration, we'll get it from audio element
-                });
-            },
-            onError: (error) => {
-                console.error('Error reading metadata:', error);
-                // Don't reject, just return empty metadata
-                resolve({
-                    artist: null,
-                    title: null,
-                    album: null,
-                    year: null,
-                    duration: null,
-                });
-            },
-        });
-    });
+    try {
+        const metadata = await musicMetadata.parseBlob(file);
+        return {
+            artist: metadata.common.artist || null,
+            title: metadata.common.title || null,
+            album: metadata.common.album || null,
+            year: metadata.common.year?.toString() || null,
+            duration: metadata.format.duration ? Math.round(metadata.format.duration) : null,
+        };
+    } catch (error) {
+        console.error('Error reading metadata:', error);
+        return {
+            artist: null,
+            title: null,
+            album: null,
+            year: null,
+            duration: null,
+        };
+    }
 }
 
 /**
- * Get audio duration from file
+ * Get audio duration from file (fallback if metadata doesn't have it)
  */
 export async function getAudioDuration(file: File): Promise<number | null> {
     return new Promise((resolve) => {
