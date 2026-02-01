@@ -1,9 +1,7 @@
 import { AlignmentResult } from '../types';
 
-// API URL: Use environment variable or fallback to localhost
-// In production, set VITE_API_URL in .env.local to your Render URL
-// Example: VITE_API_URL=https://lyric-sinc-backend.onrender.com
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API URL must be defined in .env.local (VITE_API_URL)
+const API_URL = import.meta.env.VITE_API_URL;
 
 export class AlignmentService {
   /**

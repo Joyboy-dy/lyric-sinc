@@ -1,95 +1,120 @@
 # LyricSync - Phonetic Aligner
 
-Ce projet est une application web qui permet d'aligner phonétiquement de l'audio avec du texte en utilisant WhisperX. Il se compose d'un frontend React et d'un backend Python (FastAPI).
+Application web de synchronisation audio-texte utilisant WhisperX pour générer des fichiers SRT précis.
+
+## 🏗️ Architecture
+
+### Frontend (Ce dossier)
+- **Techno** : React + Vite + TypeScript
+- **Rôle** : Interface utilisateur, upload fichiers, affichage résultat
+- **Hébergement** : Local ou déployable statiquement (Vercel/Netlify)
+
+### Backend (Cloud)
+- **Code source** : Dossier `pyback-api/` (repo GitHub séparé)
+- **Techno** : Python 3.11 + FastAPI + WhisperX
+- **Hébergement** : Render.com (Free Tier)
+- **URL** : Définie dans `.env.local`
+- **Features** :
+  - Transcription automatique haute qualité (WhisperX)
+  - Forced Alignment (si paroles fournies)
+  - Anti-mise en veille (UptimeRobot)
 
 ## Prérequis
 
-Avant de commencer, assurez-vous d'avoir installé les logiciels suivants sur votre machine :
-
-*   **Node.js** (pour le frontend)
-*   **Python 3.8+** (pour le backend)
-*   **FFmpeg** : **OBLIGATOIRE** pour le traitement audio.
-    *   *Windows* : 
-        ```powershell
-        winget install --id Gyan.FFmpeg
-        ```
-        Après l'installation, **redémarrez votre terminal** pour que FFmpeg soit reconnu.
-    *   *macOS* : `brew install ffmpeg`
-    *   *Linux* : `sudo apt install ffmpeg`
+- **Node.js** (pour le frontend)
+- **Git** (pour cloner le projet)
 
 ## Installation
 
-### 1. Backend (Python)
-
-Le backend gère la transcription et l'alignement audio.
-
-1.  Ouvrez un terminal dans le dossier racine du projet.
-2.  (Optionnel mais recommandé) Créez un environnement virtuel :
-    ```bash
-    python -m venv venv
-    # Windows
-    venv\Scripts\activate
-    # macOS/Linux
-    source venv/bin/activate
-    ```
-3.  Installez les dépendances Python :
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *Note : Si vous avez une carte graphique NVIDIA, assurez-vous d'installer la version de PyTorch compatible avec CUDA pour des performances optimales.*
-
-### 2. Frontend (React)
-
-Le frontend est l'interface utilisateur.
-
-1.  Assurez-vous d'être à la racine du projet.
-2.  Installez les dépendances Node :
-    ```bash
-    npm install
-    ```
-
-## Démarrage
-
-Vous devez lancer le backend et le frontend simultanément (dans deux terminaux séparés).
-
-### Terminal 1 : Lancer le Backend
+### 1. Cloner le projet
 
 ```bash
-# Assurez-vous que votre venv est activé
-python backend_server.py
+git clone https://github.com/Joyboy-dy/lyric-sinc.git
+cd lyric-sinc
 ```
-Le serveur démarrera sur `http://localhost:8000`.
 
-### Terminal 2 : Lancer le Frontend
+### 2. Installer les dépendances
+
+```bash
+npm install
+```
+
+### 3. Configurer l'API Backend
+
+Créez un fichier `.env.local` à la racine du projet :
+
+```bash
+VITE_API_URL=https://votre-serveur.com
+```
+
+> **Note** : Demandez l'URL du backend à l'administrateur du projet ou déployez votre propre instance (voir `pyback-api/README.md`).
+
+## Démarrage
 
 ```bash
 npm run dev
 ```
-Ouvrez votre navigateur sur l'URL indiquée (généralement `http://localhost:5173`).
+
+Ouvrez votre navigateur sur `http://localhost:3000`.
 
 ## Utilisation
 
-1.  Ouvrez l'application dans votre navigateur.
-2.  Glissez-déposez votre fichier audio (MP3, WAV, etc.).
-3.  Entrez ou collez les paroles dans la zone de texte.
-4.  Cliquez sur **"Generate Synchronized SRT"**.
-5.  Attendez le traitement (environ 30s-2min selon la durée de la chanson avec le modèle 'base').
-6.  Téléchargez le fichier SRT généré avec le bouton **Download**.
+1. Glissez-déposez votre fichier audio (MP3, WAV, etc.)
+2. Entrez ou collez les paroles dans la zone de texte (optionnel)
+3. Cliquez sur **"Generate Synchronized SRT"**
+4. Attendez le traitement (3-5 minutes selon la durée)
+5. Téléchargez le fichier SRT généré
 
-> **Note** : Le premier lancement téléchargera automatiquement le modèle Whisper (~90MB). Les utilisations suivantes seront plus rapides.
-
-## Dépannage
-
-### Erreur "Le fichier spécifié est introuvable"
-Cela signifie que FFmpeg n'est pas installé. Installez-le avec :
-```powershell
-winget install --id Gyan.FFmpeg
-```
-Puis **redémarrez votre terminal** et relancez le backend.
+> **Astuce** : Si vous ne fournissez pas de paroles, WhisperX transcrit automatiquement l'audio avec une haute précision.
 
 ## Structure du Projet
 
-*   `backend_server.py` : Le serveur API FastAPI.
-*   `src/` & `App.tsx` : Code source React.
-*   `requirements.txt` : Dépendances Python.
-*   `package.json` : Dépendances Node.js.
+```
+lyric-sinc/
+├── components/          # Composants React
+├── services/           # Services API
+├── pyback-api/         # Code source backend (projet séparé)
+├── .env.local          # Configuration (non versionné)
+├── .env.example        # Template de configuration
+└── README.md           # Ce fichier
+```
+
+## Gestion du Code
+
+### Modifications Frontend
+Modifiez les fichiers dans `components/`, `services/`, etc., puis :
+```bash
+git add .
+git commit -m "description des changements"
+git push
+```
+
+### Modifications Backend
+Le backend est un projet séparé dans `pyback-api/` :
+```bash
+cd pyback-api
+git add .
+git commit -m "update backend"
+git push
+```
+Render se mettra à jour automatiquement.
+
+## Dépannage
+
+### "Could not connect to backend server"
+- Vérifiez que `.env.local` existe et contient la bonne URL
+- Vérifiez que le backend est en ligne (visitez l'URL dans votre navigateur)
+
+### Le traitement est lent
+- C'est normal sur le plan gratuit de Render (CPU uniquement)
+- Comptez 1-2x la durée de la chanson
+
+## Technologies Utilisées
+
+- **Frontend** : React, TypeScript, Vite, Lucide Icons
+- **Backend** : Python, FastAPI, WhisperX, PyTorch
+- **Hébergement** : Render (Backend), Local/Vercel (Frontend)
+
+## License
+
+MIT
