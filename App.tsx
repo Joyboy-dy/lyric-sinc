@@ -6,6 +6,9 @@ import PipelineSteps from './components/PipelineSteps';
 import SrtOutput from './components/SrtOutput';
 import { AlignmentService } from './services/api';
 import { AlignmentResult, ProcessingState } from './types';
+import { extractMetadata, getAudioDuration } from './services/metadata';
+import { searchLyrics } from './services/lrclib';
+import { lrcToSrt } from './utils/lrcToSrt';
 
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -13,6 +16,59 @@ const App: React.FC = () => {
   const [processingState, setProcessingState] = useState<ProcessingState>({ step: 'idle' });
   const [result, setResult] = useState<AlignmentResult | null>(null);
   const [useMock, setUseMock] = useState(false);
+  const [smartAlignStatus, setSmartAlignStatus] = useState<string | null>(null);
+
+  // Smart Align: auto-detect lyrics when file is selected
+  const handleFileSelect = async (selectedFile: File | null) => {
+    setFile(selectedFile);
+    setSmartAlignStatus(null);
+    setLyrics('');
+    setResult(null);
+
+    if (!selectedFile) return;
+
+    try {
+      setSmartAlignStatus('🔍 Analyzing audio...');
+
+      // Extract metadata
+      const [metadata, duration] = await Promise.all([
+        extractMetadata(selectedFile),
+        getAudioDuration(selectedFile),
+      ]);
+
+      if (metadata.artist && metadata.title) {
+        setSmartAlignStatus(`🎵 Detected: ${metadata.artist} - ${metadata.title}`);
+
+        // Search LRCLIB
+        setSmartAlignStatus(`⏳ Searching lyrics database...`);
+        const lyricsData = await searchLyrics({ ...metadata, duration });
+
+        if (lyricsData?.syncedLyrics) {
+          setSmartAlignStatus(`✅ Synced lyrics found!`);
+
+          // Convert LRC to SRT
+          const srtContent = lrcToSrt(lyricsData.syncedLyrics);
+
+          // Display instantly as result
+          setResult({
+            srt_content: srtContent,
+            word_segments: [],
+            full_json: { segments: [] },
+          });
+
+          setLyrics(lyricsData.plainLyrics || lyricsData.syncedLyrics);
+          setSmartAlignStatus(`🎉 Ready! (from LRCLIB database)`);
+        } else {
+          setSmartAlignStatus(`ℹ️ No lyrics found in database. Please paste lyrics manually.`);
+        }
+      } else {
+        setSmartAlignStatus(`ℹ️ No metadata found. Please paste lyrics manually.`);
+      }
+    } catch (error) {
+      console.error('Smart Align error:', error);
+      setSmartAlignStatus(`⚠️ Auto-detection failed. You can still generate manually.`);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!file && !useMock) return;
@@ -112,8 +168,8 @@ const App: React.FC = () => {
               <div className="flex-grow">
                 <DropZone
                   selectedFile={file}
-                  onFileSelected={setFile}
-                  onClear={() => setFile(null)}
+                  onFileSelected={handleFileSelect}
+                  onClear={() => { setFile(null); setSmartAlignStatus(null); setResult(null); }}
                 />
               </div>
 
@@ -128,6 +184,11 @@ const App: React.FC = () => {
                       <li>Alignment: Word-level timestamps</li>
                       <li>Output: Millisecond-accurate SRT</li>
                     </ul>
+                    {smartAlignStatus && (
+                      <div className="mt-3 pt-3 border-t border-slate-700">
+                        <p className="text-sm text-indigo-400">{smartAlignStatus}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
