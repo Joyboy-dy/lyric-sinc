@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [result, setResult] = useState<AlignmentResult | null>(null);
   const [useMock, setUseMock] = useState(false);
   const [smartAlignStatus, setSmartAlignStatus] = useState<string | null>(null);
+  const [detectedMetadata, setDetectedMetadata] = useState<{ artist: string | null; title: string | null } | null>(null);
 
   // Smart Align: auto-detect lyrics when file is selected
   const handleFileSelect = async (selectedFile: File | null) => {
@@ -35,6 +36,9 @@ const App: React.FC = () => {
         extractMetadata(selectedFile),
         getAudioDuration(selectedFile),
       ]);
+
+      // Store detected metadata for filename generation
+      setDetectedMetadata({ artist: metadata.artist, title: metadata.title });
 
       if (metadata.artist && metadata.title) {
         setSmartAlignStatus(`🎵 Detected: ${metadata.artist} - ${metadata.title}`);
@@ -241,7 +245,11 @@ const App: React.FC = () => {
           {/* Results Section */}
           {result && (
             <div className="flex-grow min-h-[400px] animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <SrtOutput result={result} />
+              <SrtOutput
+                result={result}
+                filename={file?.name || 'output'}
+                metadata={detectedMetadata}
+              />
             </div>
           )}
 

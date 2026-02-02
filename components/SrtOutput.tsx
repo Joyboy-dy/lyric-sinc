@@ -4,11 +4,28 @@ import { AlignmentResult } from '../types';
 
 interface SrtOutputProps {
   result: AlignmentResult;
+  filename?: string;
+  metadata?: { artist: string | null; title: string | null } | null;
 }
 
-const SrtOutput: React.FC<SrtOutputProps> = ({ result }) => {
+const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', metadata }) => {
   const [activeTab, setActiveTab] = useState<'srt' | 'json'>('srt');
   const [copied, setCopied] = useState(false);
+
+  const generateFilename = (): string => {
+    // Priority 1: Use metadata if available
+    if (metadata?.artist && metadata?.title) {
+      const sanitized = `${metadata.artist} - ${metadata.title}`
+        .replace(/[<>:"/\\|?*]/g, '-') // Remove invalid filename chars
+        .replace(/\s+/g, ' ') // Normalize spaces
+        .trim();
+      return sanitized;
+    }
+
+    // Priority 2: Use audio filename without extension
+    const nameWithoutExt = filename.replace(/\.(mp3|wav|m4a|flac|ogg|aac)$/i, '');
+    return nameWithoutExt || 'output';
+  };
 
   const handleCopy = () => {
     const content = activeTab === 'srt' ? result.srt_content : JSON.stringify(result.full_json, null, 2);
@@ -23,7 +40,7 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result }) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `output.${activeTab}`;
+    a.download = `${generateFilename()}.${activeTab}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -37,8 +54,8 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result }) => {
           <button
             onClick={() => setActiveTab('srt')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
-              ${activeTab === 'srt' 
-                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' 
+              ${activeTab === 'srt'
+                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
           >
             <FileText size={14} />
@@ -47,15 +64,15 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result }) => {
           <button
             onClick={() => setActiveTab('json')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
-              ${activeTab === 'json' 
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+              ${activeTab === 'json'
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
           >
             <FileJson size={14} />
             <span>Word Timestamps (JSON)</span>
           </button>
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button
             onClick={handleCopy}
@@ -76,8 +93,8 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result }) => {
 
       <div className="flex-grow relative bg-slate-900 overflow-auto">
         <pre className="absolute inset-0 p-4 text-xs md:text-sm font-mono text-slate-300 whitespace-pre-wrap overflow-auto scrollbar-thin">
-          {activeTab === 'srt' 
-            ? result.srt_content 
+          {activeTab === 'srt'
+            ? result.srt_content
             : JSON.stringify(result.full_json, null, 2)
           }
         </pre>
