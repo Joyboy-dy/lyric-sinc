@@ -5,12 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LyricSync - WhisperX Aligner</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        color-scheme: dark;
+      }
       body {
-        font-family: 'Inter', sans-serif;
-        background-color: #0f172a; /* slate-900 */
-        color: #f8fafc; /* slate-50 */
+        font-family: 'IBM Plex Sans', sans-serif;
+        background: radial-gradient(1200px 600px at 15% -10%, rgba(16, 185, 129, 0.18), transparent 60%),
+          radial-gradient(900px 500px at 90% 0%, rgba(14, 116, 144, 0.25), transparent 55%),
+          #0b0f13;
+        color: #f8fafc;
+      }
+      h1, h2, h3, .font-display {
+        font-family: 'Space Grotesk', sans-serif;
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
@@ -18,14 +26,14 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1e293b; 
+        background: #111827; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #475569; 
+        background: #374151; 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
+        background: #4b5563; 
       }
     </style>
   <script type="importmap">

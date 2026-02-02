@@ -48,15 +48,15 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
   };
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden flex flex-col h-full shadow-lg">
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
+    <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col h-full shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-950/70 border-b border-white/10">
         <div className="flex space-x-2">
           <button
             onClick={() => setActiveTab('srt')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
               ${activeTab === 'srt'
-                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
+                ? 'bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
           >
             <FileText size={14} />
             <span>SRT Subtitles</span>
@@ -65,8 +65,8 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
             onClick={() => setActiveTab('json')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
               ${activeTab === 'json'
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'}`}
+                ? 'bg-cyan-300 text-slate-900 shadow-lg shadow-cyan-300/30'
+                : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
           >
             <FileJson size={14} />
             <span>Word Timestamps (JSON)</span>
@@ -76,14 +76,14 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
         <div className="flex items-center space-x-2">
           <button
             onClick={handleCopy}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             title="Copy to clipboard"
           >
             {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
           </button>
           <button
             onClick={handleDownload}
-            className="flex items-center space-x-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-medium transition-colors"
+            className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 rounded-lg text-xs font-medium transition-colors"
           >
             <Download size={14} />
             <span>Download</span>
@@ -91,8 +91,8 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
         </div>
       </div>
 
-      <div className="flex-grow relative bg-slate-900 overflow-auto">
-        <pre className="absolute inset-0 p-4 text-xs md:text-sm font-mono text-slate-300 whitespace-pre-wrap overflow-auto scrollbar-thin">
+      <div className="flex-grow relative bg-slate-950/70 overflow-auto">
+        <pre className="absolute inset-0 p-4 text-xs md:text-sm font-mono text-slate-200 whitespace-pre-wrap overflow-auto">
           {activeTab === 'srt'
             ? result.srt_content
             : JSON.stringify(result.full_json, null, 2)

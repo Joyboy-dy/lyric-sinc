@@ -36,19 +36,19 @@ const DropZone: React.FC<DropZoneProps> = ({ onFileSelected, selectedFile, onCle
 
   if (selectedFile) {
     return (
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 flex items-center justify-between shadow-sm">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <Music size={24} />
+      <div className="bg-slate-950/70 border border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-[0_12px_40px_rgba(15,23,42,0.35)]">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-400/15 flex items-center justify-center text-emerald-300 border border-emerald-400/30">
+            <Music size={22} />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-200">{selectedFile.name}</p>
+            <p className="text-sm font-medium text-white">{selectedFile.name}</p>
             <p className="text-xs text-slate-400">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
           </div>
         </div>
         <button 
           onClick={onClear}
-          className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors"
+          className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-rose-300 transition-colors"
         >
           <X size={20} />
         </button>
@@ -61,8 +61,8 @@ const DropZone: React.FC<DropZoneProps> = ({ onFileSelected, selectedFile, onCle
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative group cursor-pointer rounded-xl border-2 border-dashed transition-all duration-200 ease-in-out
-        ${isDragging ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800/50'}
+      className={`relative group cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-200 ease-in-out
+        ${isDragging ? 'border-emerald-400 bg-emerald-400/10' : 'border-white/15 hover:border-emerald-400/50 hover:bg-white/5'}
       `}
     >
       <input
@@ -72,12 +72,12 @@ const DropZone: React.FC<DropZoneProps> = ({ onFileSelected, selectedFile, onCle
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-        <div className={`p-4 rounded-full bg-slate-800 mb-4 transition-transform group-hover:scale-110 duration-200 ${isDragging ? 'text-indigo-400' : 'text-slate-400'}`}>
-          <Upload size={32} />
+        <div className={`p-4 rounded-full bg-slate-950/80 border border-white/10 mb-4 transition-transform group-hover:scale-110 duration-200 ${isDragging ? 'text-emerald-300' : 'text-slate-300'}`}>
+          <Upload size={30} />
         </div>
-        <h3 className="text-lg font-semibold text-slate-200 mb-1">Upload Audio File</h3>
+        <h3 className="text-lg font-semibold text-white mb-1">Upload audio</h3>
         <p className="text-sm text-slate-400 max-w-xs">
-          Drag & drop or click to select MP3, WAV, FLAC
+          Drag and drop or click to select MP3, WAV, or FLAC.
         </p>
       </div>
     </div>
