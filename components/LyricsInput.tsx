@@ -11,13 +11,13 @@ const LyricsInput: React.FC<LyricsInputProps> = ({ value, onChange }) => {
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 mb-3 text-slate-300">
         <AlignLeft size={18} />
-        <span className="font-medium text-sm">Lyrics or transcript</span>
+        <span className="font-medium text-sm">Lyrics or transcript (optional)</span>
       </div>
       <div className="relative flex-grow">
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Paste the lyrics here..."
+          placeholder="Optional: paste lyrics here (used for manual notes/demo mode)..."
           className="w-full h-64 md:h-full min-h-[220px] p-4 bg-slate-950/70 border border-white/10 rounded-2xl 
             text-slate-200 placeholder-slate-500 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400/60 focus:border-transparent"
         />

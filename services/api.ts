@@ -5,12 +5,11 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 export class AlignmentService {
   /**
-   * Sends audio and lyrics to the Python backend for alignment.
+   * Sends audio to the Python backend and returns SRT content.
    */
-  static async alignAudio(audioFile: File, lyrics: string): Promise<AlignmentResult> {
+  static async alignAudio(audioFile: File): Promise<AlignmentResult> {
     const formData = new FormData();
     formData.append('audio_file', audioFile);
-    formData.append('lyrics', lyrics);
 
     try {
       const response = await fetch(`${API_URL}/align`, {
@@ -23,8 +22,12 @@ export class AlignmentService {
         throw new Error(`Alignment failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
-      const data = await response.json();
-      return data as AlignmentResult;
+      const srtContent = await response.text();
+      return {
+        srt_content: srtContent,
+        word_segments: [],
+        full_json: { segments: [] },
+      };
     } catch (error) {
       console.error("API Error:", error);
       // Check for network error (server down, CORS, etc)
@@ -42,7 +45,8 @@ export class AlignmentService {
     // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    const words = lyrics.split(/\s+/).filter(w => w.length > 0);
+    const fallbackLyrics = lyrics.trim() || "This is a demo lyric line for SRT generation";
+    const words = fallbackLyrics.split(/\s+/).filter(w => w.length > 0);
     const mockSegments = [];
     let currentTime = 0.5;
 

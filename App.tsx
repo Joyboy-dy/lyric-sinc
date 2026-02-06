@@ -70,7 +70,7 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!file && !useMock) return;
-    if (!lyrics) {
+    if (useMock && !lyrics) {
       alert('Please enter lyrics first.');
       return;
     }
@@ -92,7 +92,7 @@ const App: React.FC = () => {
         setProcessingState({ step: 'uploading', message: 'Uploading audio to server...' });
         setProcessingState({ step: 'transcribing', message: 'Server processing: transcribing & aligning...' });
         if (file) {
-          data = await AlignmentService.alignAudio(file, lyrics);
+          data = await AlignmentService.alignAudio(file);
         } else {
           throw new Error('No file provided');
         }
@@ -167,7 +167,7 @@ const App: React.FC = () => {
                 Build precise, time-aligned lyrics in minutes.
               </h2>
               <p className="text-base text-slate-300 max-w-2xl">
-                Upload a track, paste lyrics, and export production-grade SRT or JSON. The pipeline is tuned for
+                Upload a track and export production-grade SRT. The pipeline is tuned for
                 fast alignment, clean timestamps, and dependable exports.
               </p>
               <div className="flex flex-wrap gap-3 text-sm">
@@ -177,7 +177,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
                   <Workflow size={16} className="text-cyan-300" />
-                  SRT + JSON exports
+                  SRT export
                 </div>
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
                   <Wand2 size={16} className="text-amber-300" />
@@ -202,7 +202,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Outputs</span>
-                  <span className="text-slate-200">SRT and JSON</span>
+                  <span className="text-slate-200">SRT</span>
                 </div>
               </div>
               <div className="bg-slate-950/70 border border-white/10 rounded-xl p-4">
@@ -211,8 +211,8 @@ const App: React.FC = () => {
                   <div className="space-y-1 text-sm text-slate-300">
                     <p>Pipeline configuration:</p>
                     <ul className="list-disc list-inside text-xs text-slate-400 ml-1 space-y-1">
-                      <li>Engine: Faster-Whisper (CPU)</li>
-                      <li>Alignment: Word-level timestamps</li>
+                      <li>Engine: WhisperX medium (CPU)</li>
+                      <li>Alignment: WhisperX word-level alignment</li>
                       <li>Export: Millisecond-accurate SRT</li>
                     </ul>
                     {smartAlignStatus && (

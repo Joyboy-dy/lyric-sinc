@@ -9,6 +9,7 @@ interface SrtOutputProps {
 }
 
 const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', metadata }) => {
+  const hasJson = result.full_json.segments.length > 0;
   const [activeTab, setActiveTab] = useState<'srt' | 'json'>('srt');
   const [copied, setCopied] = useState(false);
 
@@ -62,11 +63,13 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
             <span>SRT Subtitles</span>
           </button>
           <button
-            onClick={() => setActiveTab('json')}
+            onClick={() => hasJson && setActiveTab('json')}
+            disabled={!hasJson}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
               ${activeTab === 'json'
                 ? 'bg-cyan-300 text-slate-900 shadow-lg shadow-cyan-300/30'
-                : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
+                : 'text-slate-400 hover:text-white hover:bg-white/10'}
+              ${!hasJson ? 'opacity-50 cursor-not-allowed hover:text-slate-400 hover:bg-transparent' : ''}`}
           >
             <FileJson size={14} />
             <span>Word Timestamps (JSON)</span>
