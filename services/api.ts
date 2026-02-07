@@ -7,10 +7,15 @@ export class SrtService {
   /**
    * Sends audio to the Python backend and returns SRT content.
    */
-  static async generateSrt(audioFile: File, srtMode: 'lyric' | 'paragraph' = 'lyric'): Promise<SrtResult> {
+  static async generateSrt(
+    audioFile: File,
+    params: { lyricsText?: string; srtMode?: 'sentence' | 'paragraph'; addInstrumentalTags?: boolean } = {}
+  ): Promise<SrtResult> {
     const formData = new FormData();
     formData.append('audio_file', audioFile);
-    formData.append('srt_mode', srtMode);
+    formData.append('srt_mode', params.srtMode ?? 'sentence');
+    formData.append('lyrics_text', params.lyricsText ?? '');
+    formData.append('add_instrumental_tags', String(params.addInstrumentalTags ?? false));
 
     try {
       const response = await fetch(`${API_URL}/srt`, {
@@ -30,32 +35,6 @@ export class SrtService {
     } catch (error) {
       console.error("API Error:", error);
       // Check for network error (server down, CORS, etc)
-      if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
-        throw new Error("Could not connect to backend server at " + API_URL + ". Is it running?");
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Translate an existing SRT to a target language (optionally transliterated to Latin script).
-   */
-  static async translateSrt(srtContent: string, targetLanguage: string): Promise<SrtResult> {
-    try {
-      const response = await fetch(`${API_URL}/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ srt_content: srtContent, target_language: targetLanguage }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Translation failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      return { srt_content: await response.text() };
-    } catch (error) {
-      console.error("API Error:", error);
       if (error instanceof TypeError && error.message.includes("Failed to fetch")) {
         throw new Error("Could not connect to backend server at " + API_URL + ". Is it running?");
       }

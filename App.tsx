@@ -7,42 +7,18 @@ import { SrtService } from './services/api';
 import { ProcessingState, SrtResult } from './types';
 import { extractMetadata } from './services/metadata';
 
-const TRANSLATION_OPTIONS: Array<{ code: string; label: string }> = [
-  { code: 'en', label: 'English' },
-  { code: 'fr', label: 'French' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'de', label: 'German' },
-  { code: 'it', label: 'Italian' },
-  { code: 'ja', label: 'Japanese (Romaji)' },
-  { code: 'zh-Hans', label: 'Chinese (Simplified, Pinyin)' },
-  { code: 'zh-Hant', label: 'Chinese (Traditional, Pinyin)' },
-  { code: 'ko', label: 'Korean (Romanized)' },
-  { code: 'th', label: 'Thai (Romanized)' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'ru', label: 'Russian (Transliterated)' },
-  { code: 'ar', label: 'Arabic (Latin phonetic)' },
-  { code: 'hi', label: 'Hindi (Latin transliteration)' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'id', label: 'Indonesian' },
-  { code: 'vi', label: 'Vietnamese' },
-  { code: 'tr', label: 'Turkish' },
-  { code: 'pl', label: 'Polish' },
-];
-
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [processingState, setProcessingState] = useState<ProcessingState>({ step: 'idle' });
   const [result, setResult] = useState<SrtResult | null>(null);
-  const [translatedSrt, setTranslatedSrt] = useState<string | null>(null);
-  const [translationTarget, setTranslationTarget] = useState<string>('');
-  const [srtMode, setSrtMode] = useState<'lyric' | 'paragraph'>('lyric');
+  const [lyricsText, setLyricsText] = useState<string>('');
+  const [srtMode, setSrtMode] = useState<'sentence' | 'paragraph'>('sentence');
+  const [addInstrumentalTags, setAddInstrumentalTags] = useState<boolean>(false);
   const [detectedMetadata, setDetectedMetadata] = useState<{ artist: string | null; title: string | null } | null>(null);
 
   const handleFileSelect = async (selectedFile: File | null) => {
     setFile(selectedFile);
     setResult(null);
-    setTranslatedSrt(null);
-    setTranslationTarget('');
     setDetectedMetadata(null);
 
     if (!selectedFile) return;
@@ -59,14 +35,16 @@ const App: React.FC = () => {
     if (!file) return;
 
     setResult(null);
-    setTranslatedSrt(null);
-    setTranslationTarget('');
     setProcessingState({ step: 'uploading', message: 'Preparing audio...' });
 
     try {
       setProcessingState({ step: 'uploading', message: 'Uploading audio to server...' });
-      setProcessingState({ step: 'generating', message: 'Server processing: transcribing & segmenting...' });
-      const data = await SrtService.generateSrt(file, srtMode);
+      setProcessingState({ step: 'processing', message: 'Server processing: vocals → VAD → ASR → alignment...' });
+      const data = await SrtService.generateSrt(file, {
+        lyricsText,
+        srtMode,
+        addInstrumentalTags,
+      });
 
       setResult(data);
       setProcessingState({ step: 'completed', message: 'Done!' });
@@ -83,30 +61,14 @@ const App: React.FC = () => {
     setFile(null);
     setResult(null);
     setProcessingState({ step: 'idle' });
-    setTranslatedSrt(null);
-    setTranslationTarget('');
+    setLyricsText('');
+    setAddInstrumentalTags(false);
+    setSrtMode('sentence');
     setDetectedMetadata(null);
   };
 
-  const isBusy = processingState.step === 'uploading' || processingState.step === 'generating' || processingState.step === 'translating';
+  const isBusy = processingState.step === 'uploading' || processingState.step === 'processing';
   const canGenerate = !!file && !isBusy;
-
-  const handleTranslate = async () => {
-    if (!result || !translationTarget) return;
-
-    setProcessingState({ step: 'translating', message: 'Translating subtitles...' });
-    try {
-      const translated = await SrtService.translateSrt(result.srt_content, translationTarget);
-      setTranslatedSrt(translated.srt_content);
-      setProcessingState({ step: 'completed', message: 'Translation ready!' });
-    } catch (error) {
-      console.error(error);
-      setProcessingState({
-        step: 'error',
-        message: error instanceof Error ? error.message : 'An unknown error occurred',
-      });
-    }
-  };
 
   return (
     <div className="min-h-screen flex flex-col text-slate-100 relative overflow-hidden">
@@ -121,7 +83,7 @@ const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-lg font-semibold font-display tracking-tight">LyricSync</h1>
-              <p className="text-xs text-slate-400">Whisper large-v2 SRT generator</p>
+              <p className="text-xs text-slate-400">Production lyric-to-SRT (Demucs + VAD + Whisper)</p>
             </div>
           </div>
 
@@ -146,16 +108,16 @@ const App: React.FC = () => {
                 Generate clean SRT subtitles for lyric videos.
               </h2>
               <p className="text-base text-slate-300 max-w-2xl">
-                Upload audio, choose a segmentation mode, and export editor-friendly subtitles.
+                Upload audio and (optionally) paste lyrics. If lyrics are provided, the SRT text follows them and aligns to the audio.
               </p>
               <div className="flex flex-wrap gap-3 text-sm">
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
                   <ShieldCheck size={16} className="text-emerald-300" />
-                  Whisper large-v2 (CPU)
+                  Whisper large-v2 (CPU, int8)
                 </div>
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
                   <Workflow size={16} className="text-cyan-300" />
-                  Lyric / paragraph modes
+                  Lyrics-guided alignment
                 </div>
               </div>
             </div>
@@ -171,8 +133,8 @@ const App: React.FC = () => {
                   <span className="text-slate-200">MP3, WAV, FLAC</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>Alignment target</span>
-                  <span className="text-slate-200">Audio only</span>
+                  <span>Inputs</span>
+                  <span className="text-slate-200">Audio + optional lyrics</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Outputs</span>
@@ -185,9 +147,10 @@ const App: React.FC = () => {
                   <div className="space-y-1 text-sm text-slate-300">
                     <p>Pipeline configuration:</p>
                     <ul className="list-disc list-inside text-xs text-slate-400 ml-1 space-y-1">
-                      <li>Engine: OpenAI Whisper large-v2 (CPU)</li>
-                      <li>Segmentation: Lyric / Paragraph</li>
-                      <li>Optional: subtitle translation (with Latin transliteration for non-Latin languages)</li>
+                      <li>Vocals: Demucs separation</li>
+                      <li>Instrumentals: VAD-based gap detection</li>
+                      <li>ASR: faster-whisper large-v2 (CPU int8)</li>
+                      <li>Lyrics: forced matching when provided</li>
                     </ul>
                   </div>
                 </div>
@@ -209,20 +172,70 @@ const App: React.FC = () => {
             </div>
           </section>
 
+          <section className="grid grid-cols-1 gap-6">
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-semibold text-white">Optional lyrics (source of truth)</h3>
+                <p className="text-xs text-slate-400">Paste lyrics to force the SRT text. If empty, the app will use best-effort transcription.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <textarea
+                  value={lyricsText}
+                  onChange={(e) => setLyricsText(e.target.value)}
+                  disabled={isBusy}
+                  placeholder="Paste lyrics here..."
+                  className="min-h-[140px] w-full px-4 py-3 rounded-2xl bg-slate-950/70 border border-white/10 text-slate-200 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                />
+
+                <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                  <label className="text-xs text-slate-400">
+                    Or upload a .txt lyrics file:{' '}
+                    <input
+                      type="file"
+                      accept=".txt,text/plain"
+                      disabled={isBusy}
+                      className="block mt-2 text-xs text-slate-300"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        const text = await f.text();
+                        setLyricsText(text);
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    disabled={isBusy || !lyricsText.trim()}
+                    onClick={() => setLyricsText('')}
+                    className={`px-5 py-2 rounded-xl border text-sm transition-colors ${
+                      isBusy || !lyricsText.trim()
+                        ? 'border-white/10 text-slate-500 bg-white/5 cursor-not-allowed'
+                        : 'border-white/20 text-slate-300 hover:text-white hover:border-white/30'
+                    }`}
+                  >
+                    Clear lyrics
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="flex flex-col items-center justify-center gap-4">
             <div className="flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-full px-3 py-2">
               <span className="text-slate-400">SRT mode</span>
               <button
                 type="button"
-                onClick={() => setSrtMode('lyric')}
+                onClick={() => setSrtMode('sentence')}
                 disabled={isBusy}
                 className={`px-2 py-1 rounded-full border transition-colors ${
-                  srtMode === 'lyric'
+                  srtMode === 'sentence'
                     ? 'bg-emerald-400/20 border-emerald-400/40 text-emerald-200'
                     : 'bg-transparent border-white/10 text-slate-300 hover:border-white/20'
                 }`}
               >
-                lyric
+                sentence
               </button>
               <button
                 type="button"
@@ -237,6 +250,19 @@ const App: React.FC = () => {
                 paragraph
               </button>
             </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-full px-3 py-2 select-none">
+              <input
+                type="checkbox"
+                checked={addInstrumentalTags}
+                disabled={isBusy}
+                onChange={(e) => setAddInstrumentalTags(e.target.checked)}
+              />
+              <span className="text-slate-400">Add</span>
+              <span className="text-slate-200">[INSTRUMENTAL]</span>
+              <span className="text-slate-400">tags</span>
+            </label>
+
             <div className="flex flex-col md:flex-row items-center gap-3">
               <button
                 onClick={handleGenerate}
@@ -272,61 +298,12 @@ const App: React.FC = () => {
           )}
 
           {result && (
-            <section className="grid grid-cols-1 gap-6">
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-6 space-y-4">
-                <div>
-                  <h3 className="text-base font-semibold text-white">Optional translation</h3>
-                  <p className="text-xs text-slate-400">Translate the generated SRT. Non-Latin languages are returned as Latin transliteration.</p>
-                </div>
-
-                <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
-                  <select
-                    value={translationTarget}
-                    onChange={(e) => { setTranslationTarget(e.target.value); setTranslatedSrt(null); }}
-                    disabled={isBusy}
-                    className="w-full md:w-[340px] px-3 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-                  >
-                    <option value="">No translation</option>
-                    {TRANSLATION_OPTIONS.map((opt) => (
-                      <option key={opt.code} value={opt.code}>{opt.label}</option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={handleTranslate}
-                    disabled={!translationTarget || isBusy}
-                    className={`px-5 py-2 rounded-xl border text-sm font-semibold transition-colors ${
-                      !translationTarget || isBusy
-                        ? 'border-white/10 text-slate-500 bg-white/5 cursor-not-allowed'
-                        : 'border-emerald-400/30 text-emerald-200 bg-emerald-400/10 hover:bg-emerald-400/15'
-                    }`}
-                  >
-                    Translate
-                  </button>
-
-                  {translatedSrt && (
-                    <button
-                      type="button"
-                      onClick={() => { setTranslatedSrt(null); setTranslationTarget(''); }}
-                      disabled={isBusy}
-                      className="px-5 py-2 rounded-xl border border-white/10 text-sm text-slate-300 hover:text-white hover:border-white/30 transition-colors"
-                    >
-                      Use original
-                    </button>
-                  )}
-                </div>
-              </div>
-            </section>
-          )}
-
-          {result && (
             <div className="min-h-[420px] animate-in fade-in slide-in-from-bottom-4 duration-500">
               <SrtOutput
-                result={{ srt_content: translatedSrt ?? result.srt_content }}
+                result={result}
                 filename={file?.name || 'output'}
                 metadata={detectedMetadata}
-                label={translatedSrt ? (TRANSLATION_OPTIONS.find(o => o.code === translationTarget)?.label || 'Translated') : srtMode}
+                label={lyricsText.trim() ? `${srtMode} • lyrics` : `${srtMode} • asr`}
               />
             </div>
           )}

@@ -1,18 +1,23 @@
-# LyricSync — Whisper SRT Generator
+# LyricSync — Production Lyric-to-SRT
 
-Web app (React + FastAPI) to generate SRT subtitles for lyric videos from **audio only** using the official OpenAI Whisper model **`large-v2`** on **CPU**.
+Web app (React + FastAPI) to generate production-grade SRT subtitles for lyric videos using open-source components:
+
+- **Demucs** (vocals isolation)
+- **VAD** (instrumental gap detection)
+- **faster-whisper** (`large-v2`, CPU int8) for word timestamps
+- Optional **lyrics-guided forced matching** (lyrics become the source of truth)
 
 ## Workflow
 
 1. Upload audio
-2. Choose SRT mode (**Lyric** / **Paragraph**)
-3. Generate SRT
-4. (Optional) Translate subtitles
-5. Download final SRT
+2. (Optional) Paste/upload lyrics text
+3. Choose SRT mode (**Sentence** / **Paragraph**)
+4. Generate SRT
+5. Download SRT
 
 ## SRT modes
 
-- **Lyric (default)**: short subtitle lines (≈ max 8 words), split on punctuation + pauses (editor-friendly).
+- **Sentence (default)**: short subtitle lines (≈ max 8 words), split on punctuation + VAD silence gaps (editor-friendly).
 - **Paragraph**: natural Whisper segments (longer transcript blocks).
 
 ## Project structure
@@ -43,11 +48,6 @@ Set `VITE_API_URL` in `.env.local`:
 VITE_API_URL=http://localhost:7860
 ```
 
-## Translation
+## Notes
 
-Translation runs server-side via OpenAI and requires `OPENAI_API_KEY` on the backend environment.
-
-Optional env var:
-
-- `OPENAI_TRANSLATE_MODEL` (default: `gpt-4o-mini`)
-
+- Backend requires `ffmpeg` available in PATH.

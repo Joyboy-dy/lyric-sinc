@@ -1,5 +1,5 @@
 {
   "name": "LyricSync - Phonetic Aligner",
-  "description": "Generate clean SRT subtitles for lyric videos using OpenAI Whisper large-v2, with lyric/paragraph segmentation and optional translated (Latin-transliterated) exports.",
+  "description": "Production lyric-to-SRT generator using Demucs vocals isolation, VAD-based instrumental detection, and faster-whisper large-v2 word timestamps with optional lyrics-guided forced matching.",
   "requestFramePermissions": []
 }
