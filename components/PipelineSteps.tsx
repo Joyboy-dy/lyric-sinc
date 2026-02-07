@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Loader2, FileAudio, FileText, AlignCenter, FileCheck } from 'lucide-react';
+import { CheckCircle2, Loader2, FileAudio, FileText, Languages, FileCheck } from 'lucide-react';
 import { ProcessingState } from '../types';
 
 interface PipelineStepsProps {
@@ -8,8 +8,8 @@ interface PipelineStepsProps {
 
 const steps = [
   { id: 'uploading', label: 'Uploading', icon: FileAudio },
-  { id: 'transcribing', label: 'Transcribing', icon: FileText },
-  { id: 'aligning', label: 'Aligning', icon: AlignCenter },
+  { id: 'generating', label: 'Generating', icon: FileText },
+  { id: 'translating', label: 'Translating', icon: Languages },
   { id: 'completed', label: 'Ready', icon: FileCheck },
 ];
 
@@ -18,7 +18,7 @@ const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
   const [estimatedMessage, setEstimatedMessage] = useState('');
 
   useEffect(() => {
-    if (state.step === 'uploading' || state.step === 'transcribing' || state.step === 'aligning') {
+    if (state.step === 'uploading' || state.step === 'generating' || state.step === 'translating') {
       setElapsedTime(0);
       const interval = setInterval(() => {
         setElapsedTime(prev => prev + 1);
@@ -28,28 +28,24 @@ const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
   }, [state.step]);
 
   useEffect(() => {
-    if (state.step === 'transcribing' || state.step === 'aligning') {
-      if (elapsedTime < 10) {
-        setEstimatedMessage('Uploading to server...');
-      } else if (elapsedTime < 30) {
-        setEstimatedMessage('Loading model...');
-      } else if (elapsedTime < 60) {
-        setEstimatedMessage('Transcription in progress...');
-      } else if (elapsedTime < 120) {
-        setEstimatedMessage('Aligning words...');
-      } else {
-        setEstimatedMessage('Finalizing output...');
-      }
+    if (state.step === 'generating') {
+      if (elapsedTime < 10) setEstimatedMessage('Uploading to server...');
+      else if (elapsedTime < 30) setEstimatedMessage('Loading Whisper model...');
+      else if (elapsedTime < 90) setEstimatedMessage('Transcribing audio...');
+      else setEstimatedMessage('Segmenting subtitles...');
+    } else if (state.step === 'translating') {
+      if (elapsedTime < 10) setEstimatedMessage('Preparing translation...');
+      else setEstimatedMessage('Translating subtitles...');
     }
   }, [elapsedTime, state.step]);
 
   let activeIndex = -1;
   if (state.step === 'uploading') activeIndex = 0;
-  if (state.step === 'transcribing') activeIndex = 1;
-  if (state.step === 'aligning') activeIndex = 2;
+  if (state.step === 'generating') activeIndex = 1;
+  if (state.step === 'translating') activeIndex = 2;
   if (state.step === 'completed') activeIndex = 3;
 
-  const isProcessing = state.step === 'transcribing' || state.step === 'aligning';
+  const isProcessing = state.step === 'uploading' || state.step === 'generating' || state.step === 'translating';
 
   return (
     <div className="w-full py-6">

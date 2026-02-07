@@ -31,7 +31,6 @@ function parseFilename(filename: string): { artist: string | null; title: string
         const parts = normalized.split(' - ').map(p => p.trim());
         if (parts.length >= 2) {
             // Could be "Artist - Title" or "Title - Artist"
-            // We'll try both when searching LRCLIB
             return {
                 artist: parts[parts.length - 1], // Last part is often artist for downloads
                 title: parts.slice(0, -1).join(' - '), // Everything else is title

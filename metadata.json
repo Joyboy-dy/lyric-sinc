@@ -1,5 +1,5 @@
 {
   "name": "LyricSync - Phonetic Aligner",
-  "description": "Precise phonetic alignment of audio and lyrics using WhisperX to generate word-level SRT subtitles.",
+  "description": "Generate clean SRT subtitles for lyric videos using OpenAI Whisper large-v2, with lyric/paragraph segmentation and optional translated (Latin-transliterated) exports.",
   "requestFramePermissions": []
 }

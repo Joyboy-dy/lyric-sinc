@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { Download, Copy, FileJson, FileText, Check } from 'lucide-react';
-import { AlignmentResult } from '../types';
+import { Download, Copy, FileText, Check } from 'lucide-react';
+import { SrtResult } from '../types';
 
 interface SrtOutputProps {
-  result: AlignmentResult;
+  result: SrtResult;
   filename?: string;
   metadata?: { artist: string | null; title: string | null } | null;
+  label?: string;
 }
 
-const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', metadata }) => {
-  const hasJson = result.full_json.segments.length > 0;
-  const [activeTab, setActiveTab] = useState<'srt' | 'json'>('srt');
+const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', metadata, label }) => {
   const [copied, setCopied] = useState(false);
 
   const generateFilename = (): string => {
@@ -29,19 +28,17 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
   };
 
   const handleCopy = () => {
-    const content = activeTab === 'srt' ? result.srt_content : JSON.stringify(result.full_json, null, 2);
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(result.srt_content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
-    const content = activeTab === 'srt' ? result.srt_content : JSON.stringify(result.full_json, null, 2);
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([result.srt_content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${generateFilename()}.${activeTab}`;
+    a.download = `${generateFilename()}.srt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -51,29 +48,11 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
   return (
     <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden flex flex-col h-full shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
       <div className="flex items-center justify-between px-4 py-3 bg-slate-950/70 border-b border-white/10">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setActiveTab('srt')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
-              ${activeTab === 'srt'
-                ? 'bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/30'
-                : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
-          >
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-400 text-slate-900 shadow-lg shadow-emerald-500/30 flex items-center gap-1.5">
             <FileText size={14} />
-            <span>SRT Subtitles</span>
-          </button>
-          <button
-            onClick={() => hasJson && setActiveTab('json')}
-            disabled={!hasJson}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center space-x-1.5
-              ${activeTab === 'json'
-                ? 'bg-cyan-300 text-slate-900 shadow-lg shadow-cyan-300/30'
-                : 'text-slate-400 hover:text-white hover:bg-white/10'}
-              ${!hasJson ? 'opacity-50 cursor-not-allowed hover:text-slate-400 hover:bg-transparent' : ''}`}
-          >
-            <FileJson size={14} />
-            <span>Word Timestamps (JSON)</span>
-          </button>
+            <span>{label ? `SRT • ${label}` : 'SRT Subtitles'}</span>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -96,10 +75,7 @@ const SrtOutput: React.FC<SrtOutputProps> = ({ result, filename = 'output', meta
 
       <div className="flex-grow relative bg-slate-950/70 overflow-auto">
         <pre className="absolute inset-0 p-4 text-xs md:text-sm font-mono text-slate-200 whitespace-pre-wrap overflow-auto">
-          {activeTab === 'srt'
-            ? result.srt_content
-            : JSON.stringify(result.full_json, null, 2)
-          }
+          {result.srt_content}
         </pre>
       </div>
     </div>
