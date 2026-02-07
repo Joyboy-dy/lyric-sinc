@@ -1,102 +1,79 @@
 import React, { useState } from 'react';
-import { Sparkles, Terminal, AlertCircle, RefreshCw, ShieldCheck, Workflow, Wand2 } from 'lucide-react';
+import { Sparkles, Terminal, AlertCircle, ShieldCheck, Workflow } from 'lucide-react';
 import DropZone from './components/DropZone';
-import LyricsInput from './components/LyricsInput';
 import PipelineSteps from './components/PipelineSteps';
 import SrtOutput from './components/SrtOutput';
 import { AlignmentService } from './services/api';
 import { AlignmentResult, ProcessingState } from './types';
-import { extractMetadata, getAudioDuration } from './services/metadata';
+import { extractMetadata } from './services/metadata';
 import { searchLyrics } from './services/lrclib';
 import { lrcToSrt } from './utils/lrcToSrt';
 
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [lyrics, setLyrics] = useState<string>('');
   const [processingState, setProcessingState] = useState<ProcessingState>({ step: 'idle' });
   const [result, setResult] = useState<AlignmentResult | null>(null);
-  const [useMock, setUseMock] = useState(false);
+  const [srtMode, setSrtMode] = useState<'paragraph' | 'sentence'>('sentence');
+  const [trackLookupState, setTrackLookupState] = useState<'idle' | 'checking' | 'known' | 'unknown' | 'error'>('idle');
   const [smartAlignStatus, setSmartAlignStatus] = useState<string | null>(null);
   const [detectedMetadata, setDetectedMetadata] = useState<{ artist: string | null; title: string | null } | null>(null);
 
   const handleFileSelect = async (selectedFile: File | null) => {
     setFile(selectedFile);
-    setSmartAlignStatus(null);
-    setLyrics('');
     setResult(null);
+    setTrackLookupState('idle');
+    setSmartAlignStatus(null);
+    setDetectedMetadata(null);
 
     if (!selectedFile) return;
 
+    setTrackLookupState('checking');
     try {
       setSmartAlignStatus('Analyzing audio metadata...');
-
-      const [metadata, duration] = await Promise.all([
-        extractMetadata(selectedFile),
-        getAudioDuration(selectedFile),
-      ]);
-
+      const metadata = await extractMetadata(selectedFile);
       setDetectedMetadata({ artist: metadata.artist, title: metadata.title });
 
-      if (metadata.artist && metadata.title) {
-        setSmartAlignStatus(`Detected: ${metadata.artist} - ${metadata.title}`);
+      if (metadata.title) {
+        const display = [metadata.artist, metadata.title].filter(Boolean).join(' - ');
+        if (display) setSmartAlignStatus(`Detected: ${display}`);
 
         setSmartAlignStatus('Searching lyric database...');
-        const lyricsData = await searchLyrics({ ...metadata, duration });
+        const lyricsData = await searchLyrics(metadata);
 
         if (lyricsData?.syncedLyrics) {
-          setSmartAlignStatus('Synced lyrics found. Ready to export.');
-
           const srtContent = lrcToSrt(lyricsData.syncedLyrics);
-
-          setResult({
-            srt_content: srtContent,
-            word_segments: [],
-            full_json: { segments: [] },
-          });
-
-          setLyrics(lyricsData.plainLyrics || lyricsData.syncedLyrics);
-          setSmartAlignStatus('Ready. Lyrics loaded from database.');
-        } else {
-          setSmartAlignStatus('No lyrics found. Paste them manually to continue.');
+          if (srtContent.trim()) {
+            setResult({
+              srt_content: srtContent,
+              word_segments: [],
+              full_json: { segments: [] },
+            });
+            setTrackLookupState('known');
+            setSmartAlignStatus('Synced lyrics found. Ready to export.');
+            return;
+          }
         }
-      } else {
-        setSmartAlignStatus('No metadata found. Paste lyrics manually.');
       }
+
+      setTrackLookupState('unknown');
+      setSmartAlignStatus('No synced lyrics found. You can generate from audio.');
     } catch (error) {
-      console.error('Smart Align error:', error);
-      setSmartAlignStatus('Auto-detection failed. You can still generate manually.');
+      console.error(error);
+      setTrackLookupState('error');
+      setSmartAlignStatus('Track analysis failed. You can still generate from audio.');
     }
   };
 
   const handleGenerate = async () => {
-    if (!file && !useMock) return;
-    if (useMock && !lyrics) {
-      alert('Please enter lyrics first.');
-      return;
-    }
+    if (!file) return;
 
     setResult(null);
     setProcessingState({ step: 'uploading', message: 'Preparing audio...' });
 
     try {
-      let data: AlignmentResult;
-
-      if (useMock) {
-        setProcessingState({ step: 'uploading', message: 'Simulating upload...' });
-        await new Promise(r => setTimeout(r, 800));
-        setProcessingState({ step: 'transcribing', message: 'Simulating WhisperX transcription...' });
-        await new Promise(r => setTimeout(r, 1500));
-        setProcessingState({ step: 'aligning', message: 'Simulating phoneme alignment...' });
-        data = await AlignmentService.mockAlign(lyrics);
-      } else {
-        setProcessingState({ step: 'uploading', message: 'Uploading audio to server...' });
-        setProcessingState({ step: 'transcribing', message: 'Server processing: transcribing & aligning...' });
-        if (file) {
-          data = await AlignmentService.alignAudio(file);
-        } else {
-          throw new Error('No file provided');
-        }
-      }
+      setProcessingState({ step: 'uploading', message: 'Uploading audio to server...' });
+      setProcessingState({ step: 'transcribing', message: 'Server processing: transcribing & aligning...' });
+      const data = await AlignmentService.alignAudio(file, srtMode);
 
       setResult(data);
       setProcessingState({ step: 'completed', message: 'Done!' });
@@ -111,13 +88,15 @@ const App: React.FC = () => {
 
   const handleReset = () => {
     setFile(null);
-    setLyrics('');
     setResult(null);
     setProcessingState({ step: 'idle' });
+    setTrackLookupState('idle');
+    setSmartAlignStatus(null);
+    setDetectedMetadata(null);
   };
 
   const isBusy = processingState.step !== 'idle';
-  const canGenerate = (!!file || useMock) && !isBusy;
+  const canGenerate = !!file && !isBusy && trackLookupState !== 'checking';
 
   return (
     <div className="min-h-screen flex flex-col text-slate-100 relative overflow-hidden">
@@ -141,16 +120,6 @@ const App: React.FC = () => {
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               Production-ready pipeline
             </div>
-            <label className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-xs text-slate-300">
-              <input
-                type="checkbox"
-                id="mockMode"
-                checked={useMock}
-                onChange={(e) => setUseMock(e.target.checked)}
-                className="rounded border-white/20 bg-slate-900 text-emerald-400 focus:ring-emerald-500/40"
-              />
-              Demo mode
-            </label>
           </div>
         </div>
       </header>
@@ -178,10 +147,6 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
                   <Workflow size={16} className="text-cyan-300" />
                   SRT export
-                </div>
-                <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-slate-200">
-                  <Wand2 size={16} className="text-amber-300" />
-                  Smart auto-detect
                 </div>
               </div>
             </div>
@@ -226,25 +191,48 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <section className="grid grid-cols-1 gap-6">
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-6 space-y-4">
               <div>
                 <h3 className="text-base font-semibold text-white">Audio upload</h3>
-                <p className="text-xs text-slate-400">Drop a track to start smart alignment.</p>
+                <p className="text-xs text-slate-400">Drop a track to generate subtitles.</p>
               </div>
               <DropZone
                 selectedFile={file}
                 onFileSelected={handleFileSelect}
-                onClear={() => { setFile(null); setSmartAlignStatus(null); setResult(null); }}
+                onClear={() => { setFile(null); setResult(null); }}
               />
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 md:p-6 h-full">
-              <LyricsInput value={lyrics} onChange={setLyrics} />
             </div>
           </section>
 
           <section className="flex flex-col items-center justify-center gap-4">
+            <div className="flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-full px-3 py-2">
+              <span className="text-slate-400">SRT mode</span>
+              <button
+                type="button"
+                onClick={() => setSrtMode('sentence')}
+                disabled={isBusy}
+                className={`px-2 py-1 rounded-full border transition-colors ${
+                  srtMode === 'sentence'
+                    ? 'bg-emerald-400/20 border-emerald-400/40 text-emerald-200'
+                    : 'bg-transparent border-white/10 text-slate-300 hover:border-white/20'
+                }`}
+              >
+                sentence
+              </button>
+              <button
+                type="button"
+                onClick={() => setSrtMode('paragraph')}
+                disabled={isBusy}
+                className={`px-2 py-1 rounded-full border transition-colors ${
+                  srtMode === 'paragraph'
+                    ? 'bg-emerald-400/20 border-emerald-400/40 text-emerald-200'
+                    : 'bg-transparent border-white/10 text-slate-300 hover:border-white/20'
+                }`}
+              >
+                paragraph
+              </button>
+            </div>
             <div className="flex flex-col md:flex-row items-center gap-3">
               <button
                 onClick={handleGenerate}
@@ -271,15 +259,6 @@ const App: React.FC = () => {
               <div className="flex items-center gap-3 text-rose-200 bg-rose-500/10 px-4 py-2 rounded-lg border border-rose-500/20 max-w-lg">
                 <AlertCircle size={18} className="flex-shrink-0" />
                 <span className="text-sm">{processingState.message}</span>
-                {processingState.message?.includes('Demo Mode') && (
-                  <button
-                    onClick={() => setUseMock(true)}
-                    className="ml-auto text-xs bg-rose-500/20 hover:bg-rose-500/30 text-rose-100 px-2 py-1 rounded transition-colors flex items-center gap-1 whitespace-nowrap"
-                  >
-                    <RefreshCw size={12} />
-                    Enable demo
-                  </button>
-                )}
               </div>
             )}
           </section>

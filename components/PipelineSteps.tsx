@@ -36,7 +36,7 @@ const PipelineSteps: React.FC<PipelineStepsProps> = ({ state }) => {
       } else if (elapsedTime < 60) {
         setEstimatedMessage('Transcription in progress...');
       } else if (elapsedTime < 120) {
-        setEstimatedMessage('Aligning lyrics...');
+        setEstimatedMessage('Aligning words...');
       } else {
         setEstimatedMessage('Finalizing output...');
       }

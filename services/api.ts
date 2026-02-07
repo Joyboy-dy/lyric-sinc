@@ -7,9 +7,10 @@ export class AlignmentService {
   /**
    * Sends audio to the Python backend and returns SRT content.
    */
-  static async alignAudio(audioFile: File): Promise<AlignmentResult> {
+  static async alignAudio(audioFile: File, srtMode: 'paragraph' | 'sentence' = 'paragraph'): Promise<AlignmentResult> {
     const formData = new FormData();
     formData.append('audio_file', audioFile);
+    formData.append('srt_mode', srtMode);
 
     try {
       const response = await fetch(`${API_URL}/align`, {
@@ -41,12 +42,11 @@ export class AlignmentService {
   /**
    * Generates mock data for demonstration purposes if the backend is not running.
    */
-  static async mockAlign(lyrics: string): Promise<AlignmentResult> {
+  static async mockAlign(): Promise<AlignmentResult> {
     // Simulate delay
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    const fallbackLyrics = lyrics.trim() || "This is a demo lyric line for SRT generation";
-    const words = fallbackLyrics.split(/\s+/).filter(w => w.length > 0);
+    const words = "This is a demo lyric line for SRT generation".split(/\s+/).filter(w => w.length > 0);
     const mockSegments = [];
     let currentTime = 0.5;
 
