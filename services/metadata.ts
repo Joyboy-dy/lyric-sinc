@@ -30,10 +30,9 @@ function parseFilename(filename: string): { artist: string | null; title: string
     if (normalized.includes(' - ')) {
         const parts = normalized.split(' - ').map(p => p.trim());
         if (parts.length >= 2) {
-            // Could be "Artist - Title" or "Title - Artist"
             return {
-                artist: parts[parts.length - 1], // Last part is often artist for downloads
-                title: parts.slice(0, -1).join(' - '), // Everything else is title
+                artist: parts[0] || null,
+                title: parts.slice(1).join(' - ') || null,
             };
         }
     }
@@ -43,8 +42,8 @@ function parseFilename(filename: string): { artist: string | null; title: string
         const parts = normalized.split('-').map(p => p.trim());
         if (parts.length >= 2) {
             return {
-                artist: parts[parts.length - 1],
-                title: parts.slice(0, -1).join(' '),
+                artist: parts[0] || null,
+                title: parts.slice(1).join(' ') || null,
             };
         }
     }

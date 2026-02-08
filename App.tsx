@@ -6,28 +6,58 @@ import SrtOutput from './components/SrtOutput';
 import { SrtService } from './services/api';
 import { ProcessingState, SrtResult } from './types';
 import { extractMetadata } from './services/metadata';
+import { searchLyrics } from './services/lrclib';
+import { lrcToSrt } from './utils/lrcToSrt';
 
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [processingState, setProcessingState] = useState<ProcessingState>({ step: 'idle' });
   const [result, setResult] = useState<SrtResult | null>(null);
+  const [resultSource, setResultSource] = useState<'backend' | 'lrclib' | null>(null);
   const [lyricsText, setLyricsText] = useState<string>('');
   const [srtMode, setSrtMode] = useState<'sentence' | 'paragraph'>('sentence');
   const [addInstrumentalTags, setAddInstrumentalTags] = useState<boolean>(false);
   const [detectedMetadata, setDetectedMetadata] = useState<{ artist: string | null; title: string | null } | null>(null);
+  const [smartAlignStatus, setSmartAlignStatus] = useState<string | null>(null);
 
   const handleFileSelect = async (selectedFile: File | null) => {
     setFile(selectedFile);
     setResult(null);
+    setResultSource(null);
     setDetectedMetadata(null);
+    setSmartAlignStatus(null);
+    setProcessingState({ step: 'idle' });
 
     if (!selectedFile) return;
 
     try {
+      setSmartAlignStatus('Analyzing audio metadata…');
       const metadata = await extractMetadata(selectedFile);
       setDetectedMetadata({ artist: metadata.artist, title: metadata.title });
+
+      if (!metadata.title) {
+        setSmartAlignStatus('No title detected. Smart lyrics lookup skipped.');
+        return;
+      }
+
+      setSmartAlignStatus('Searching LRCLIB for synced lyrics…');
+      const lyricsData = await searchLyrics(metadata);
+
+      if (lyricsData?.syncedLyrics) {
+        const srtContent = lrcToSrt(lyricsData.syncedLyrics);
+        if (srtContent.trim()) {
+          setResult({ srt_content: srtContent });
+          setResultSource('lrclib');
+          setLyricsText((current) => (current.trim() ? current : (lyricsData.plainLyrics || lyricsData.syncedLyrics)));
+          setSmartAlignStatus(`Synced lyrics found on LRCLIB (SRT ready): ${lyricsData.artistName} — ${lyricsData.trackName}`);
+          return;
+        }
+      }
+
+      setSmartAlignStatus('No synced lyrics found on LRCLIB. You can still generate via backend.');
     } catch (error) {
       console.error(error);
+      setSmartAlignStatus('Smart lyrics lookup failed. You can still generate via backend.');
     }
   };
 
@@ -35,6 +65,7 @@ const App: React.FC = () => {
     if (!file) return;
 
     setResult(null);
+    setResultSource(null);
     setProcessingState({ step: 'uploading', message: 'Preparing audio...' });
 
     try {
@@ -47,6 +78,7 @@ const App: React.FC = () => {
       });
 
       setResult(data);
+      setResultSource('backend');
       setProcessingState({ step: 'completed', message: 'Done!' });
     } catch (error) {
       console.error(error);
@@ -60,11 +92,13 @@ const App: React.FC = () => {
   const handleReset = () => {
     setFile(null);
     setResult(null);
+    setResultSource(null);
     setProcessingState({ step: 'idle' });
     setLyricsText('');
     setAddInstrumentalTags(false);
     setSrtMode('sentence');
     setDetectedMetadata(null);
+    setSmartAlignStatus(null);
   };
 
   const isBusy = processingState.step === 'uploading' || processingState.step === 'processing';
@@ -167,8 +201,25 @@ const App: React.FC = () => {
               <DropZone
                 selectedFile={file}
                 onFileSelected={handleFileSelect}
-                onClear={() => { setFile(null); setResult(null); }}
+                onClear={() => {
+                  setFile(null);
+                  setResult(null);
+                  setResultSource(null);
+                  setDetectedMetadata(null);
+                  setSmartAlignStatus(null);
+                  setProcessingState({ step: 'idle' });
+                }}
               />
+
+              {smartAlignStatus && (
+                <div className="flex items-start gap-3 text-xs text-slate-300 bg-slate-950/70 border border-white/10 rounded-xl p-3">
+                  <Workflow size={16} className="text-emerald-300 mt-0.5 flex-shrink-0" />
+                  <div className="leading-relaxed">
+                    <div className="text-slate-200 font-medium">Smart lyrics (LRCLIB)</div>
+                    <div className="text-slate-400">{smartAlignStatus}</div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -303,7 +354,11 @@ const App: React.FC = () => {
                 result={result}
                 filename={file?.name || 'output'}
                 metadata={detectedMetadata}
-                label={lyricsText.trim() ? `${srtMode} • lyrics` : `${srtMode} • asr`}
+                label={
+                  resultSource === 'lrclib'
+                    ? 'lrclib • synced'
+                    : (lyricsText.trim() ? `${srtMode} • lyrics` : `${srtMode} • asr`)
+                }
               />
             </div>
           )}
