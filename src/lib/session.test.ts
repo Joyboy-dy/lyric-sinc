@@ -26,6 +26,7 @@ function state(overrides: Partial<SessionState> = {}): SessionState {
     result: { cues: [{ start: 1, end: 2, text: "One line" }], source: "synced lyrics from LRCLIB" },
     lookupNote: "Synced lyrics found on LRCLIB",
     job: { id: "j1", createdAt: 1_000_500 },
+    songKey: "song.mp3|3|42",
     ...overrides,
   };
 }
@@ -70,6 +71,16 @@ describe("browser session", () => {
     await expect(fresh.saveState(state())).resolves.toBeUndefined();
     await expect(fresh.loadSession()).resolves.toBeNull();
     await expect(fresh.clearSession()).resolves.toBeUndefined();
+  });
+
+  it("rejects audio of another song than the state", async () => {
+    await session.saveAudio(new File(["other song"], "other.mp3", { type: "audio/mpeg", lastModified: 7 }));
+    await session.saveState(state());
+    expect(await session.loadSession(1_000_000 + 1)).toBeNull();
+  });
+
+  it("keys a song by name, size and date", () => {
+    expect(session.songKey(song())).toBe("song.mp3|3|42");
   });
 
   it("isFresh uses a strict 24 h window", () => {

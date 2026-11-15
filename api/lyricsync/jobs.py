@@ -5,6 +5,7 @@ No audio or model code here: the store and the worker are tested on their own.
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import sqlite3
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 from typing import Callable, Literal, Optional
 
 JobStatus = Literal["queued", "running", "done", "failed", "cancelled"]
+
+logger = logging.getLogger("lyricsync.jobs")
 
 RESTART_ERROR = "The server restarted during the alignment"
 
@@ -183,6 +186,17 @@ class JobStore:
         with self._lock:
             self._db.execute("UPDATE jobs SET audio_path = NULL WHERE id = ?", (job_id,))
 
+    def release_finished_audio(self) -> list[str]:
+        """Audio files no job will read again (finished, failed, or cancelled before it started),
+        detached from their jobs so the caller can delete them. A job cancelled while running
+        keeps its file: the worker still reads it and deletes it when done."""
+        with self._lock:
+            condition = """audio_path IS NOT NULL AND (status IN ('done', 'failed')
+                           OR (status = 'cancelled' AND started_at IS NULL))"""
+            paths = [p for (p,) in self._db.execute(f"SELECT audio_path FROM jobs WHERE {condition}")]
+            self._db.execute(f"UPDATE jobs SET audio_path = NULL WHERE {condition}")
+        return paths
+
     def purge_expired(self) -> list[str]:
         with self._lock:
             now = self._clock()
@@ -211,8 +225,13 @@ def _delete(path: Optional[str]) -> None:
         return
     try:
         os.remove(path)
-    except FileNotFoundError:
+    except OSError:
         pass
+
+
+def delete_files(paths: list[str]) -> None:
+    for path in paths:
+        _delete(path)
 
 
 class Worker:
@@ -240,7 +259,10 @@ class Worker:
         try:
             self._store.finish(job.id, self._process(job))
         except Exception as e:  # noqa: BLE001 - reported to the user through the job
-            self._store.fail(job.id, str(e) or type(e).__name__)
+            # The user sees one line; tool output with server paths stays in the log.
+            message = (str(e).strip().splitlines() or [type(e).__name__])[0][:200]
+            logger.warning("Job %s failed: %s", job.id, e)
+            self._store.fail(job.id, message)
         finally:
             # The song is never kept once its job is over, whatever the outcome.
             _delete(job.audio_path)
@@ -248,8 +270,8 @@ class Worker:
         return True
 
     def purge(self) -> None:
-        for path in self._store.purge_expired():
-            _delete(path)
+        delete_files(self._store.purge_expired())
+        delete_files(self._store.release_finished_audio())
 
     def start(self) -> None:
         self._stop.clear()
@@ -264,8 +286,12 @@ class Worker:
     def _loop(self) -> None:
         next_purge = time.monotonic()
         while not self._stop.is_set():
-            if time.monotonic() >= next_purge:
-                self.purge()
-                next_purge = time.monotonic() + self._purge_every
-            if not self.run_once():
-                self._stop.wait(self._idle_wait)
+            try:
+                if time.monotonic() >= next_purge:
+                    self.purge()
+                    next_purge = time.monotonic() + self._purge_every
+                if self.run_once():
+                    continue
+            except Exception:  # noqa: BLE001 - one bad turn (disk full, closed db) must not end the queue
+                logger.exception("Job worker error, retrying")
+            self._stop.wait(self._idle_wait)

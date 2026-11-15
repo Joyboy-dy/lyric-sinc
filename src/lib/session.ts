@@ -18,6 +18,8 @@ export interface SessionState {
   lookupNote: string | null;
   /** The server alignment in progress, to pick up again after a reload. */
   job: { id: string; createdAt: number } | null;
+  /** The song this state belongs to, see songKey: audio and state are saved apart. */
+  songKey: string;
 }
 
 /** The song as stored: a File loses its name in some browsers' storage, so keep it apart. */
@@ -42,6 +44,11 @@ function db(): UseStore | null {
     store = null;
   }
   return store;
+}
+
+/** Identifies a song file well enough to tell two apart: name, size and modification date. */
+export function songKey(file: File): string {
+  return `${file.name}|${file.size}|${file.lastModified}`;
 }
 
 export function isFresh(createdAt: number, now: number): boolean {
@@ -72,7 +79,11 @@ export async function loadSession(now = Date.now()): Promise<{ state: SessionSta
     return null;
   }
   const { blob, name, type, lastModified } = loaded.audio;
-  return { state: loaded.state, file: new File([blob], name, { type, lastModified }) };
+  const file = new File([blob], name, { type, lastModified });
+  // A reload between saving a new song and its state, or a failed audio save, leaves
+  // the audio of one song next to the state of another: show neither.
+  if (songKey(file) !== loaded.state.songKey) return null;
+  return { state: loaded.state, file };
 }
 
 export async function clearSession(): Promise<void> {

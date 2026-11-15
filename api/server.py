@@ -22,7 +22,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, Response
 
-from lyricsync.jobs import Job, JobStore, QueueFull, Worker
+from lyricsync.jobs import Job, JobStore, QueueFull, Worker, delete_files
 from lyricsync.text import (
     SILENCE_GAP_S,
     Span,
@@ -86,6 +86,7 @@ async def lifespan(_app: FastAPI):
     _store = JobStore(os.path.join(DATA_DIR, "jobs.sqlite"))
     # Jobs cut short by a restart fail; queued ones stay and the worker picks them up.
     _store.recover()
+    delete_files(_store.release_finished_audio())
     worker = Worker(_store, _process)
     worker.start()
     try:
@@ -325,6 +326,8 @@ def cancel_job(job_id: str) -> Response:
     assert _store is not None
     if not _store.cancel(job_id):
         raise HTTPException(status_code=404, detail="Unknown, expired or finished job")
+    # A job cancelled before it started will never be read: its song goes now.
+    delete_files(_store.release_finished_audio())
     return Response(status_code=204)
 
 

@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 
 import pytest
@@ -222,3 +223,63 @@ def test_purge_deletes_files_of_expired_jobs(store, tmp_path, clock):
     clock[0] += 86401
     Worker(store, lambda j: SRT).purge()
     assert not audio.exists()
+
+
+def test_release_finished_audio(store, tmp_path):
+    queued = audio_file(tmp_path, "queued.mp3")
+    running = audio_file(tmp_path, "running.mp3")
+    a = create(store, audio_path=str(running))
+    b = create(store, audio_path=str(queued))
+    store.claim_next()  # a is running
+    store.cancel(a.id)  # cancelled while running: the worker still holds its file
+    store.cancel(b.id)  # cancelled while queued: nobody will ever process it
+    assert store.release_finished_audio() == [str(queued)]
+    assert store.get(b.id).audio_path is None
+    assert store.get(a.id).audio_path == str(running)
+    assert store.release_finished_audio() == []
+
+
+def test_recover_releases_the_audio_of_lost_jobs(tmp_path):
+    path = str(tmp_path / "jobs.db")
+    first = JobStore(path)
+    a = create(first, audio_path="lost.mp3")
+    first.claim_next()
+    first.close()
+    second = JobStore(path)
+    second.recover()
+    assert second.release_finished_audio() == ["lost.mp3"]
+    assert second.get(a.id).audio_path is None
+    second.close()
+
+
+def test_worker_survives_a_store_error(store, tmp_path, monkeypatch):
+    real_claim = store.claim_next
+    calls = {"n": 0}
+
+    def flaky_claim():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise sqlite3.OperationalError("database or disk is full")
+        return real_claim()
+
+    monkeypatch.setattr(store, "claim_next", flaky_claim)
+    worker = Worker(store, lambda j: SRT, idle_wait_s=0.01)
+    worker.start()
+    try:
+        job = create(store, audio_path=str(audio_file(tmp_path)))
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and store.get(job.id).status != "done":
+            time.sleep(0.02)
+        assert store.get(job.id).status == "done"
+    finally:
+        worker.stop()
+
+
+def test_worker_keeps_only_the_first_line_of_an_error(store, tmp_path):
+    job = create(store, audio_path=str(audio_file(tmp_path)))
+
+    def ffmpeg_failure(_job):
+        raise RuntimeError("ffmpeg failed\n" + "/home/user/app/data/uploads/x.mp3: Invalid data\n" * 50)
+
+    Worker(store, ffmpeg_failure).run_once()
+    assert store.get(job.id).error == "ffmpeg failed"

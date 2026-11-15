@@ -92,6 +92,8 @@ def test_cancel_queued_job(client, gate):
         assert second["position"] >= 0
         assert client.delete(f"/jobs/{second['id']}").status_code == 204
         assert client.get(f"/jobs/{second['id']}").json()["status"] == "cancelled"
+        # Its song is deleted at once, not 24 h later.
+        assert len(list((client.data_dir / "uploads").iterdir())) == 1
         assert client.delete(f"/jobs/{second['id']}").status_code == 404
     finally:
         gate.set()

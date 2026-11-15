@@ -19,7 +19,8 @@ import { lrcToCues } from "@/lib/lrc";
 import { findSyncedLyrics } from "@/lib/lrclib";
 import { readTrackInfo, srtFilename, type TrackInfo } from "@/lib/metadata";
 import { filePeaks } from "@/lib/peaks";
-import { clearSession, loadSession, saveAudio, saveState, SESSION_TTL_MS } from "@/lib/session";
+import { aligningText, startAlignment } from "@/lib/progress";
+import { clearSession, loadSession, saveAudio, saveState, SESSION_TTL_MS, songKey } from "@/lib/session";
 import { formatClock, parseSrt, type Cue } from "@/lib/srt";
 
 const REPO_URL = "https://github.com/Joyboy-dy/lyric-sinc";
@@ -40,7 +41,7 @@ interface Result {
   source: string;
 }
 
-/** A server alignment in progress. `startedAt` is this browser's clock, for the elapsed time. */
+/** A server alignment in progress. `createdAt` is this browser's clock, for the elapsed time. */
 interface RunningJob {
   id: string;
   createdAt: number;
@@ -85,9 +86,11 @@ export default function App() {
   // Back from a reload: the song, its lyrics, the subtitles and any alignment still running.
   useEffect(() => {
     let cancelled = false;
+    const run = runRef.current;
     loadSession().then((saved) => {
       if (cancelled) return;
-      if (saved) {
+      // A song dropped while the old session was loading wins over it.
+      if (saved && run === runRef.current) {
         const { state } = saved;
         setFile(saved.file);
         setCreatedAt(state.createdAt);
@@ -108,10 +111,14 @@ export default function App() {
     };
   }, []);
 
-  // Kept in this browser while a song is loaded, a moment after each change.
+  // Kept in this browser while a song is loaded, a moment after each change, at once when an
+  // alignment starts or ends: a reload right then must find the job.
+  const savedJobRef = useRef<string | null>(null);
   useEffect(() => {
     if (restoring || !file || createdAt === null) return;
+    const jobChanged = (job?.id ?? null) !== savedJobRef.current;
     const timer = setTimeout(() => {
+      savedJobRef.current = job?.id ?? null;
       void saveState({
         createdAt,
         info,
@@ -122,8 +129,9 @@ export default function App() {
         result,
         lookupNote: lookupText(lookup),
         job,
+        songKey: songKey(file),
       });
-    }, 400);
+    }, jobChanged ? 0 : 400);
     return () => clearTimeout(timer);
   }, [restoring, file, createdAt, info, lyrics, mode, instrumentalTags, result, lookup, job]);
 
@@ -221,10 +229,14 @@ export default function App() {
     if (!file) return;
     setError(null);
     setSending(true);
-    const startedAt = Date.now();
+    const run = runRef.current;
     try {
-      const created = await createJob(file, { lyrics, mode, instrumentalTags });
-      setJob({ id: created.id, createdAt: startedAt });
+      const started = await startAlignment({
+        create: () => createJob(file, { lyrics, mode, instrumentalTags }),
+        cancel: cancelJob,
+        isCurrent: () => run === runRef.current,
+      });
+      if (started) setJob(started);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Alignment failed");
     } finally {
@@ -487,19 +499,12 @@ function Aligning({ since, waking, queuedBehind }: { since: number | null; wakin
     };
   }, [since]);
 
-  let text = waking
-    ? "Starting the server, then isolating the vocals and aligning the words. "
-    : "Isolating the vocals and aligning the words. ";
-  if (since === null) text = "Sending the song to the server. ";
-  else if (queuedBehind > 0) text = `${queuedBehind} ${queuedBehind === 1 ? "song" : "songs"} ahead of yours. `;
+  const text = aligningText({ sending: since === null, waking, queuedBehind });
 
   return (
     <div role="status" className="flex max-w-sm flex-col items-center gap-2 text-center">
       <span className="font-mono text-2xl text-white tabular-nums">{formatClock(elapsed)}</span>
-      <p className="text-sm text-[#a1a1a6]">
-        {text}
-        On the free CPU server this takes a few minutes. You can reload or close this page meanwhile
-      </p>
+      <p className="text-sm text-[#a1a1a6]">{text}</p>
     </div>
   );
 }
