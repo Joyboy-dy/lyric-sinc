@@ -18,8 +18,8 @@ The alignment server behind [LyricSync](https://github.com/Joyboy-dy/lyric-sinc)
 1. **ffmpeg** converts the upload to WAV.
 2. **Demucs** (`htdemucs`, two stems) isolates the vocals.
 3. **WebRTC VAD** finds the sung parts and the instrumental gaps.
-4. **faster-whisper** (`large-v2`, CPU, int8) transcribes the vocals with word timestamps.
-5. With lyrics: each lyric word is matched to a heard word (Needleman–Wunsch on normalised spellings). Long stretches it missed get a second, closer listen, the rest is placed inside the sung parts.
+4. **faster-whisper** (`large-v3-turbo`, CPU, int8) transcribes the vocals with word timestamps.
+5. With lyrics: each lyric word is matched to a heard word (Needleman–Wunsch on normalised spellings, similarity from rapidfuzz, each distinct pair of spellings scored once). Long stretches it missed get a second, closer listen, the rest is placed inside the sung parts.
 6. Words are grouped into subtitles, nothing is shown over an instrumental, and timing rules apply (no overlap, at least 0.3 s on screen).
 
 ## API
@@ -43,7 +43,7 @@ Songs are processed one at a time; the next request waits for the current one.
 | --- | --- | --- |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated front-end origins allowed by CORS |
 | `MAX_UPLOAD_MB` | `60` | Largest accepted upload |
-| `WHISPER_MODEL` | `large-v2` | faster-whisper model (also a Docker build argument) |
+| `WHISPER_MODEL` | `large-v3-turbo` | faster-whisper model (also a Docker build argument); `large-v2` is slower and was the previous default |
 | `WHISPER_DEVICE`, `WHISPER_COMPUTE_TYPE` | `cpu`, `int8` | Where and how the model runs |
 
 ## Run locally
@@ -62,8 +62,9 @@ The first start downloads the Whisper and Demucs weights (several GB). With Dock
 The text logic (`lyricsync/text.py`: alignment, segmentation, timing, SRT) has no audio dependency:
 
 ```bash
-pip install pytest
+pip install pytest rapidfuzz
 pytest
+python bench/align_bench.py   # alignment time on songs of 150 to 700 words
 ```
 
 ## Deploy to the Space

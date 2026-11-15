@@ -104,6 +104,17 @@ def parse_lyrics(lyrics_text: str) -> list[Word]:
     return words
 
 
+try:
+    # Indel similarity, 2 × common letters / total letters: the same measure as difflib's
+    # ratio, computed in C++ and exact where difflib's block heuristic can undercount.
+    from rapidfuzz.distance import Indel
+
+    _ratio = Indel.normalized_similarity
+except ImportError:  # pragma: no cover - rapidfuzz is in requirements.txt
+    def _ratio(a: str, b: str) -> float:
+        return difflib.SequenceMatcher(None, a, b).ratio()
+
+
 def similarity(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
@@ -111,7 +122,11 @@ def similarity(a: str, b: str) -> float:
         return 1.0
     if len(a) >= 3 and (a in b or b in a):
         return 0.86
-    return difflib.SequenceMatcher(None, a, b).ratio()
+    return _ratio(a, b)
+
+
+def _cost(sim: float) -> float:
+    return 0.0 if sim >= 0.90 else 0.25 if sim >= 0.82 else 0.6 if sim >= 0.74 else 1.0
 
 
 def align(lyrics: list[Word], heard: list[Word]) -> list[Optional[int]]:
@@ -121,6 +136,10 @@ def align(lyrics: list[Word], heard: list[Word]) -> list[Optional[int]]:
     if n == 0 or m == 0:
         return [None] * n
 
+    # Songs repeat their words (choruses), so score each distinct pair of spellings once.
+    lyric_ids, heard_ids, sims = _pair_scores([w.norm for w in lyrics], [w.norm for w in heard])
+    costs = [[_cost(s) for s in row] for row in sims]
+
     back = [bytearray(m + 1) for _ in range(n + 1)]  # 0 diagonal, 1 skip lyric, 2 skip heard
     for j in range(1, m + 1):
         back[0][j] = 2
@@ -128,16 +147,16 @@ def align(lyrics: list[Word], heard: list[Word]) -> list[Optional[int]]:
     for i in range(1, n + 1):
         cur = [float(i)] + [0.0] * m
         back[i][0] = 1
+        row_costs = costs[lyric_ids[i - 1]]
+        row_back = back[i]
         for j in range(1, m + 1):
-            sim = similarity(lyrics[i - 1].norm, heard[j - 1].norm)
-            cost = 0.0 if sim >= 0.90 else 0.25 if sim >= 0.82 else 0.6 if sim >= 0.74 else 1.0
-            best, move = prev[j - 1] + cost, 0
+            best, move = prev[j - 1] + row_costs[heard_ids[j - 1]], 0
             if prev[j] + 1.0 < best:
                 best, move = prev[j] + 1.0, 1
             if cur[j - 1] + 1.0 < best:
                 best, move = cur[j - 1] + 1.0, 2
             cur[j] = best
-            back[i][j] = move
+            row_back[j] = move
         prev = cur
 
     mapping: list[Optional[int]] = [None] * n
@@ -145,7 +164,7 @@ def align(lyrics: list[Word], heard: list[Word]) -> list[Optional[int]]:
     while i > 0 and j > 0:
         move = back[i][j]
         if move == 0:
-            if similarity(lyrics[i - 1].norm, heard[j - 1].norm) >= 0.74:
+            if sims[lyric_ids[i - 1]][heard_ids[j - 1]] >= 0.74:
                 mapping[i - 1] = j - 1
             i, j = i - 1, j - 1
         elif move == 1:
@@ -153,6 +172,16 @@ def align(lyrics: list[Word], heard: list[Word]) -> list[Optional[int]]:
         else:
             j -= 1
     return mapping
+
+
+def _pair_scores(a: list[str], b: list[str]) -> tuple[list[int], list[int], list[list[float]]]:
+    """Index of each word among the distinct spellings, and the similarity of every pair."""
+    a_unique = list(dict.fromkeys(a))
+    b_unique = list(dict.fromkeys(b))
+    a_index = {w: k for k, w in enumerate(a_unique)}
+    b_index = {w: k for k, w in enumerate(b_unique)}
+    scores = [[similarity(x, y) for y in b_unique] for x in a_unique]
+    return [a_index[w] for w in a], [b_index[w] for w in b], scores
 
 
 def apply_alignment(lyrics: list[Word], heard: list[Word], mapping: list[Optional[int]]) -> list[Word]:

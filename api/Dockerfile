@@ -15,7 +15,8 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Download the Whisper and Demucs weights at build time, so a sleeping Space wakes up
 # without fetching several gigabytes first.
-ARG WHISPER_MODEL=large-v2
+ARG WHISPER_MODEL=large-v3-turbo
+ENV WHISPER_MODEL=${WHISPER_MODEL}
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${WHISPER_MODEL}', device='cpu', compute_type='int8')" \
     && python -c "from demucs.pretrained import get_model; get_model('htdemucs')"
 

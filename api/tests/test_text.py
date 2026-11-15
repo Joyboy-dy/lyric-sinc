@@ -128,3 +128,11 @@ def test_merge_voiced_and_instrumental_gaps():
     assert gaps == [(0.13, 2.0)]
     assert instrumental_segments(gaps) == [{"start": 0.13, "end": 2.0, "text": "[INSTRUMENTAL]"}]
     assert merge_voiced([]) == ([], [])
+
+
+def test_align_handles_a_repeated_chorus():
+    chorus = "one more time we gonna celebrate"
+    lyrics = parse_lyrics(f"{chorus}\n{chorus}")
+    transcript = heard(*[(w, i * 0.5, i * 0.5 + 0.4) for i, w in enumerate((chorus + " " + chorus).split())])
+    mapping = align(lyrics, transcript)
+    assert mapping == list(range(12))

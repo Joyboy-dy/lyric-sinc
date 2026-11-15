@@ -42,7 +42,9 @@ from lyricsync.text import (
     untimed_runs,
 )
 
-MODEL_NAME = os.environ.get("WHISPER_MODEL", "large-v2")
+# large-v3-turbo: the large-v3 encoder with a 4-layer decoder instead of 32, several times
+# faster to transcribe for nearly the same accuracy. Set WHISPER_MODEL=large-v2 to go back.
+MODEL_NAME = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
 DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
 COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "60"))
