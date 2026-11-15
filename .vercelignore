@@ -1,0 +1,5 @@
+# The alignment server runs on Hugging Face, not on Vercel. Without this, Vercel turns
+# api/ into Python serverless functions and fails on the size of PyTorch and Whisper.
+api/
+lyric-sync-api/
+docs/
