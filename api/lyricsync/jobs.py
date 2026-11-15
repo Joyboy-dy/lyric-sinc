@@ -204,3 +204,68 @@ class JobStore:
                 f"SELECT {_COLUMNS} FROM jobs WHERE status = 'queued' ORDER BY created_at, rowid"
             ).fetchall()
         return [_job(r) for r in rows]
+
+
+def _delete(path: Optional[str]) -> None:
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+class Worker:
+    """Drains the queue one job at a time on a background thread and purges expired jobs."""
+
+    def __init__(
+        self,
+        store: JobStore,
+        process: Callable[[Job], str],
+        *,
+        idle_wait_s: float = 1.0,
+        purge_every_s: float = 3600,
+    ) -> None:
+        self._store = store
+        self._process = process
+        self._idle_wait = idle_wait_s
+        self._purge_every = purge_every_s
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def run_once(self) -> bool:
+        job = self._store.claim_next()
+        if job is None:
+            return False
+        try:
+            self._store.finish(job.id, self._process(job))
+        except Exception as e:  # noqa: BLE001 - reported to the user through the job
+            self._store.fail(job.id, str(e) or type(e).__name__)
+        finally:
+            # The song is never kept once its job is over, whatever the outcome.
+            _delete(job.audio_path)
+            self._store.clear_audio(job.id)
+        return True
+
+    def purge(self) -> None:
+        for path in self._store.purge_expired():
+            _delete(path)
+
+    def start(self) -> None:
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._loop, name="lyricsync-worker", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=5)
+
+    def _loop(self) -> None:
+        next_purge = time.monotonic()
+        while not self._stop.is_set():
+            if time.monotonic() >= next_purge:
+                self.purge()
+                next_purge = time.monotonic() + self._purge_every
+            if not self.run_once():
+                self._stop.wait(self._idle_wait)

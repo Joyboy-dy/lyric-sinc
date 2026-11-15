@@ -2,7 +2,9 @@ import threading
 
 import pytest
 
-from lyricsync.jobs import JobStore, QueueFull
+import time
+
+from lyricsync.jobs import JobStore, QueueFull, Worker
 
 
 @pytest.fixture
@@ -153,3 +155,70 @@ def test_position_breaks_ties_by_arrival(store):
     create(store)
     second = create(store)  # same clock value as the first
     assert store.position(second.id) == 1
+
+
+SRT = "1\n00:00:00,000 --> 00:00:01,000\nHi\n"
+
+
+def audio_file(tmp_path, name="a.mp3"):
+    path = tmp_path / name
+    path.write_bytes(b"x")
+    return path
+
+
+def test_worker_processes_and_deletes_audio(store, tmp_path):
+    audio = audio_file(tmp_path)
+    job = create(store, audio_path=str(audio))
+    worker = Worker(store, lambda j: SRT)
+    assert worker.run_once() is True
+    done = store.get(job.id)
+    assert (done.status, done.srt) == ("done", SRT)
+    assert not audio.exists()
+    assert done.audio_path is None
+    assert worker.run_once() is False
+
+
+def test_worker_records_failures(store, tmp_path):
+    audio = audio_file(tmp_path)
+    job = create(store, audio_path=str(audio))
+
+    def broken(_job):
+        raise ValueError("bad audio")
+
+    Worker(store, broken).run_once()
+    failed = store.get(job.id)
+    assert (failed.status, failed.error) == ("failed", "bad audio")
+    assert not audio.exists()
+
+
+def test_worker_discards_result_of_cancelled_job(store, tmp_path):
+    job = create(store, audio_path=str(audio_file(tmp_path)))
+
+    def cancelled_midway(j):
+        store.cancel(j.id)
+        return SRT
+
+    Worker(store, cancelled_midway).run_once()
+    result = store.get(job.id)
+    assert (result.status, result.srt) == ("cancelled", None)
+
+
+def test_worker_thread_drains_queue(store, tmp_path):
+    worker = Worker(store, lambda j: SRT, idle_wait_s=0.01)
+    worker.start()
+    try:
+        jobs = [create(store, audio_path=str(audio_file(tmp_path, f"{i}.mp3"))) for i in range(2)]
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and any(store.get(j.id).status != "done" for j in jobs):
+            time.sleep(0.02)
+        assert [store.get(j.id).status for j in jobs] == ["done", "done"]
+    finally:
+        worker.stop()
+
+
+def test_purge_deletes_files_of_expired_jobs(store, tmp_path, clock):
+    audio = audio_file(tmp_path)
+    create(store, audio_path=str(audio))
+    clock[0] += 86401
+    Worker(store, lambda j: SRT).purge()
+    assert not audio.exists()
