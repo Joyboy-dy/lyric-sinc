@@ -65,7 +65,7 @@ Songs are processed one at a time; the next request waits for the current one.
 
 ## Run locally
 
-Needs Python 3.11 and ffmpeg.
+Needs Python 3.11 and ffmpeg. `requirements.txt` installs PyTorch for CPU.
 
 ```bash
 pip install -r requirements.txt
@@ -88,12 +88,15 @@ python bench/align_bench.py   # alignment time on songs of 150 to 700 words
 
 ## Deploy to the Space
 
-Copy this folder into the Space repository and push it, for example:
+The Space is its own git repository, built by Hugging Face from this `Dockerfile`. Deploy the server before the web app: the app calls `/jobs`.
 
-```bash
-git clone https://huggingface.co/spaces/<user>/lyric-sync-api space
-rsync -a --delete --exclude .git --exclude tests --exclude .venv api/ space/
-cd space && git add -A && git commit -m "Update from lyric-sinc" && git push
-```
+1. Clone the Space: `git clone https://huggingface.co/spaces/Joyboy-dy/lyric-sync-api space`
+2. Copy into it from this folder: `Dockerfile`, `README.md`, `requirements.txt`, `server.py`, `.dockerignore`, `.gitignore` and `lyricsync/`. Leave out `tests/`, `bench/`, `.venv/`, `data/`, `dev_fake.py` and `requirements-dev.txt`.
+3. Commit and push with a fine-grained Hugging Face token that has **Write** access to this Space only. Give it to git when it asks (credential manager, or a credential helper that reads an environment variable), **never inside the remote URL**, where it would stay in plain text in `.git/config`.
+4. Watch the build in the Space's *Logs* tab, then check that `/health` answers `{"status":"healthy"}`.
 
-Authenticate with a Hugging Face token through a credential helper, never inside the remote URL.
+Build notes:
+
+- The image is `python:3.11-slim`, which has no C compiler: every dependency must ship a prebuilt wheel. That is why the VAD comes from `webrtcvad-wheels` (same `webrtcvad` module) and not `webrtcvad`.
+- PyTorch comes from its CPU index (`torch==…+cpu` in `requirements.txt`). The default build would add about 2.5 GB of CUDA libraries the CPU Space never uses.
+- The Whisper and Demucs weights are downloaded at build time, so a sleeping Space wakes without fetching them.
