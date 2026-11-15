@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+torch
+torchcodec
+demucs
+faster-whisper
+webrtcvad
+soundfile
+numpy

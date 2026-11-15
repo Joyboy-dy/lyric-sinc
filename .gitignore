@@ -1,26 +1,14 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
+node_modules/
+dist/
 *.local
-
-# Editor directories and files
+*.log
+.DS_Store
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+*.tsbuildinfo
 
+# Local clone of the Hugging Face Space (holds its own git config): never commit it.
 lyric-sync-api/
+
+# Test audio used during development.
+public/__*

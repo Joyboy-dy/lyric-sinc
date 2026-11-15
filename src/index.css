@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Dark mode follows the operating system. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* The playhead: the only colour in the chrome. */
+  --color-playhead: var(--playhead);
+  --color-raised: var(--raised);
+  --color-positive: var(--positive);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Graphite ramp: an editing suite, people stare at it for long sessions, so the
+   surfaces stay grey and the amber playhead carries the colour. */
+:root {
+  --radius: 0.625rem;
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --raised: #f4f4f5;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #171717;
+  --muted: #f4f4f5;
+  --muted-foreground: #5f5f66;
+  --accent: #f4f4f5;
+  --accent-foreground: #171717;
+  --destructive: #c42b2b;
+  --positive: #16753c;
+  --border: rgb(23 23 23 / 0.09);
+  --input: rgb(23 23 23 / 0.32);
+  --ring: #b45309;
+  --playhead: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141415;
+    --foreground: #ededed;
+    --card: #19191b;
+    --card-foreground: #ededed;
+    --popover: #19191b;
+    --popover-foreground: #ededed;
+    --raised: #232325;
+    --primary: #ededed;
+    --primary-foreground: #141415;
+    --secondary: #232325;
+    --secondary-foreground: #ededed;
+    --muted: #232325;
+    --muted-foreground: #a1a1a6;
+    --accent: #232325;
+    --accent-foreground: #ededed;
+    --destructive: #f0716f;
+    --positive: #4cc38a;
+    --border: rgb(237 237 237 / 0.08);
+    --input: rgb(237 237 237 / 0.36);
+    --ring: #f0a43a;
+    --playhead: #f0a43a;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light dark;
+  }
+  body {
+    @apply min-h-dvh bg-background text-foreground antialiased;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--playhead) 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

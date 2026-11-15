@@ -1,53 +1,65 @@
-# LyricSync — Production Lyric-to-SRT
+<p align="center">
+  <img src="public/icon.svg" width="64" height="64" alt="" />
+</p>
 
-Web app (React + FastAPI) to generate production-grade SRT subtitles for lyric videos using open-source components:
+<h1 align="center">LyricSync</h1>
 
-- **Demucs** (vocals isolation)
-- **VAD** (instrumental gap detection)
-- **faster-whisper** (`large-v2`, CPU int8) for word timestamps
-- Optional **lyrics-guided forced matching** (lyrics become the source of truth)
+<p align="center">
+  Un morceau en entrée, un fichier de sous-titres SRT calé sur la voix en sortie, pour les vidéos de paroles.
+</p>
 
-## Workflow
+<p align="center">
+  <a href="https://github.com/Joyboy-dy/lyric-sinc/actions/workflows/ci.yml"><img src="https://github.com/Joyboy-dy/lyric-sinc/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue.svg" alt="Licence MIT" /></a>
+</p>
 
-1. Upload audio
-2. (Optional) Paste/upload lyrics text
-3. Choose SRT mode (**Sentence** / **Paragraph**)
-4. Generate SRT
-5. Download SRT
+---
 
-## SRT modes
+## Comment ça marche
 
-- **Sentence (default)**: short subtitle lines (≈ max 8 words), split on punctuation + VAD silence gaps (editor-friendly).
-- **Paragraph**: natural Whisper segments (longer transcript blocks).
+1. **Vous déposez un morceau.** L'artiste et le titre viennent des tags du fichier (ID3, Vorbis, MP4), sinon de son nom (`Artiste - Titre.mp3`).
+2. **Paroles synchronisées.** L'application cherche le morceau sur [LRCLIB](https://lrclib.net), une base libre de paroles synchronisées, en exigeant la même durée que votre fichier (à 3 secondes près) pour ne pas prendre les paroles d'une autre version. Si elle les trouve, le SRT est prêt tout de suite, sans serveur.
+3. **Sinon, alignement sur la voix.** Le serveur (`api/`) isole la voix avec Demucs, repère les passages chantés, transcrit mot à mot avec faster-whisper, puis aligne vos paroles sur ce qu'il a entendu. Sans paroles fournies, il utilise sa transcription.
+4. **Vérification.** Les sous-titres se lisent sur le morceau : un cadre façon vidéo affiche la ligne en cours, la forme d'onde montre chaque réplique posée sur la piste, et la liste suit la lecture. Cliquez une ligne pour l'entendre.
+5. **Copier ou télécharger** le fichier `.srt`, nommé d'après l'artiste et le titre.
 
-## Project structure
+Rien n'est stocké : le morceau ne quitte le navigateur que pour l'alignement sur le serveur, qui le supprime après traitement.
 
-- `components/`, `services/`, `utils/`: frontend (React + Vite + TypeScript)
-- `lyric-sync-api/`: backend (FastAPI)
+## Structure
 
-## Local dev
+| Dossier | Rôle |
+| --- | --- |
+| `src/` | Application web : React 19, TypeScript, Vite, Tailwind CSS 4, [shadcn/ui](https://ui.shadcn.com) |
+| `src/lib/` | Logique sans interface, testée : SRT, LRC, recherche LRCLIB, tags, forme d'onde |
+| `api/` | Serveur d'alignement FastAPI (Demucs, WebRTC VAD, faster-whisper), aussi contenu du Space Hugging Face. Voir [api/README.md](api/README.md) |
 
-Frontend:
+## Démarrer
 
-```bash
-npm install
-npm run dev
-```
-
-Backend:
-
-```bash
-cd lyric-sync-api
-pip install -r requirements.txt
-uvicorn server:app --reload --host 0.0.0.0 --port 7860
-```
-
-Set `VITE_API_URL` in `.env.local`:
+Prérequis : Node.js 20 ou plus et [pnpm](https://pnpm.io).
 
 ```bash
-VITE_API_URL=http://localhost:7860
+pnpm install
+cp .env.example .env.local   # puis renseigner VITE_API_URL
+pnpm dev
 ```
 
-## Notes
+Sans `VITE_API_URL`, l'application fonctionne avec LRCLIB seulement et le dit dans l'en-tête.
 
-- Backend requires `ffmpeg` available in PATH.
+| Commande | Rôle |
+| --- | --- |
+| `pnpm dev` | Serveur de développement |
+| `pnpm test` | Tests (SRT, LRC, LRCLIB, noms de fichiers, forme d'onde) |
+| `pnpm lint` | ESLint |
+| `pnpm build` | Vérification des types et build de production dans `dist/` |
+
+Le serveur se lance et se teste à part : voir [api/README.md](api/README.md).
+
+## Limites connues
+
+- Le serveur gratuit tourne sur CPU : compter quelques minutes par morceau, et une ou deux de plus s'il dormait.
+- La transcription vise surtout l'anglais et les langues bien couvertes par Whisper. Fournir les paroles améliore nettement le résultat.
+- Les paroles LRCLIB sont publiées par sa communauté : leur précision varie d'un morceau à l'autre.
+
+## Licence
+
+[MIT](LICENSE) © Joyboy-dy. Paroles synchronisées fournies par [LRCLIB](https://lrclib.net).

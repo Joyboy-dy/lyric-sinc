@@ -1,5 +1,0 @@
-{
-  "name": "LyricSync - Phonetic Aligner",
-  "description": "Production lyric-to-SRT generator using Demucs vocals isolation, VAD-based instrumental detection, and faster-whisper large-v2 word timestamps with optional lyrics-guided forced matching.",
-  "requestFramePermissions": []
-}
