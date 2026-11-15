@@ -136,3 +136,25 @@ def test_align_handles_a_repeated_chorus():
     transcript = heard(*[(w, i * 0.5, i * 0.5 + 0.4) for i, w in enumerate((chorus + " " + chorus).split())])
     mapping = align(lyrics, transcript)
     assert mapping == list(range(12))
+
+
+def test_segment_never_leaves_a_lyric_word_alone_after_a_short_pause():
+    # Whisper heard "I", then a 0.9 s pause, then the rest of the same lyric line.
+    words = [
+        Word("lights", "lights", 2.4, 3.0, line_break_after=True),
+        Word("I", "i", 3.24, 3.54),
+        Word("keep", "keep", 4.44, 4.8),
+        Word("on", "on", 4.8, 5.0),
+        Word("walking", "walking", 5.0, 5.6, line_break_after=True),
+    ]
+    segs = segment(words, "sentence")
+    assert [s["text"] for s in segs] == ["lights", "I keep on walking"]
+    assert segs[1]["start"] == 3.24
+
+
+def test_segment_still_splits_a_lone_word_before_a_long_break():
+    words = [
+        Word("Yeah", "yeah", 1.0, 1.4),
+        Word("again", "again", 4.0, 4.5),  # 2.6 s later: an instrumental break
+    ]
+    assert [s["text"] for s in segment(words, "sentence")] == ["Yeah", "again"]

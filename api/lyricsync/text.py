@@ -19,6 +19,8 @@ MIN_DUR_S = 0.30
 """Shortest time a subtitle stays on screen."""
 SILENCE_GAP_S = 0.50
 """A pause this long in the singing starts a new subtitle (and counts as an instrumental gap)."""
+LONE_WORD_MAX_GAP_S = 2.0
+"""A single word stays with what follows unless the pause after it is at least this long."""
 
 Span = tuple[float, float]
 
@@ -279,7 +281,11 @@ def segment(words: list[Word], mode: SrtMode, silence_gap: float = SILENCE_GAP_S
     for w in words:
         if not w.timed:
             continue
-        if cur and float(w.start) - float(cur[-1].end) >= silence_gap:  # type: ignore[arg-type]
+        gap = float(w.start) - float(cur[-1].end) if cur else 0.0  # type: ignore[arg-type]
+        # A pause splits the line, except right after a single word in the middle of a lyric
+        # line: a one-word subtitle flashing for a fraction of a second ("I") reads as a glitch.
+        lone_word = len(cur) == 1 and not cur[0].line_break_after and not cur[0].boundary_after
+        if cur and gap >= silence_gap and not (lone_word and gap < LONE_WORD_MAX_GAP_S):
             flush()
         cur.append(w)
         if (
