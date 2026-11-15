@@ -1,0 +1,5 @@
+pytest
+rapidfuzz
+fastapi
+httpx2
+python-multipart

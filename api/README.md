@@ -24,6 +24,22 @@ The alignment server behind [LyricSync](https://github.com/Joyboy-dy/lyric-sinc)
 
 ## API
 
+### Jobs (used by the web app)
+
+An alignment takes minutes, so the app does not wait on one request: it queues a job and polls it, and a page reload picks the job up again.
+
+| Route | Answer |
+| --- | --- |
+| `POST /jobs` (same form as `/srt` below) | `202` and the job. `429` when 5 songs are already waiting |
+| `GET /jobs/{id}` | The job, or `404` when unknown or expired |
+| `DELETE /jobs/{id}` | `204`. A waiting job is dropped; a running one finishes but its result is thrown away |
+
+A job is `{"id", "status", "position", "srt", "error", "created_at", "expires_at"}`, times in epoch seconds. `status` is `queued`, `running`, `done`, `failed` or `cancelled`; `position` counts the songs waiting ahead.
+
+The id is long and random: it is the only key to the result. Jobs live in SQLite (`DATA_DIR/jobs.sqlite`) and are deleted 24 hours after creation, checked every hour. The song is deleted as soon as its job ends. On a free Space the disk is erased when the Space restarts (rebuild, crash, after 48 h asleep), which loses the jobs sooner; a job that was running at restart is marked failed.
+
+### Synchronous
+
 `POST /srt` (multipart form), returns `application/x-subrip`:
 
 | Field | Value |
@@ -42,6 +58,7 @@ Songs are processed one at a time; the next request waits for the current one.
 | Variable | Default | Role |
 | --- | --- | --- |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated front-end origins allowed by CORS |
+| `DATA_DIR` | `data` | Jobs database and queued uploads |
 | `MAX_UPLOAD_MB` | `60` | Largest accepted upload |
 | `WHISPER_MODEL` | `large-v3-turbo` | faster-whisper model (also a Docker build argument); `large-v2` is slower and was the previous default |
 | `WHISPER_DEVICE`, `WHISPER_COMPUTE_TYPE` | `cpu`, `int8` | Where and how the model runs |
@@ -55,6 +72,8 @@ pip install -r requirements.txt
 uvicorn server:app --port 7860
 ```
 
+For work on the web app only, `python dev_fake.py` starts the same API without any model: every job waits 20 seconds (`FAKE_SECONDS`) and returns three demo subtitles.
+
 The first start downloads the Whisper and Demucs weights (several GB). With Docker: `docker build -t lyricsync-api . && docker run -p 7860:7860 lyricsync-api`.
 
 ## Tests
@@ -62,7 +81,7 @@ The first start downloads the Whisper and Demucs weights (several GB). With Dock
 The text logic (`lyricsync/text.py`: alignment, segmentation, timing, SRT) has no audio dependency:
 
 ```bash
-pip install pytest rapidfuzz
+pip install -r requirements-dev.txt
 pytest
 python bench/align_bench.py   # alignment time on songs of 150 to 700 words
 ```

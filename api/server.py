@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -15,15 +16,13 @@ import tempfile
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-import soundfile as sf
-import webrtcvad
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
-from faster_whisper import WhisperModel
+from fastapi.responses import PlainTextResponse, Response
 
+from lyricsync.jobs import Job, JobStore, QueueFull, Worker
 from lyricsync.text import (
     SILENCE_GAP_S,
     Span,
@@ -51,25 +50,57 @@ MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "60"))
 # Comma-separated list of front-end origins, "*" by default (the API holds no user data).
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 
-_model: Optional[WhisperModel] = None
+# Jobs database and uploads waiting in the queue. On a free Space this disk is erased at restart.
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+QUEUE_FULL = "The queue is full: {n} songs are waiting. Try again in a few minutes"
+
+_model: Any = None
 # One song at a time: Demucs and Whisper each fill the CPU and most of the RAM of a free Space.
 _job_lock = threading.Lock()
+_store: Optional[JobStore] = None
+
+
+class PipelineError(Exception):
+    """A failure to report to the user, with the HTTP status the synchronous route answers."""
+
+    def __init__(self, message: str, status: int = 500) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _process(job: Job) -> str:
+    # align_audio is looked up at call time, so tests can swap it.
+    return align_audio(job.audio_path or "", job.lyrics, job.mode, job.instrumental_tags)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _model
-    print(f"Loading faster-whisper {MODEL_NAME} on {DEVICE} ({COMPUTE_TYPE})", flush=True)
-    _model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
-    print("Model ready", flush=True)
-    yield
+    global _model, _store
+    if MODEL_NAME != "none":  # "none": no model, for tests and front-end development
+        from faster_whisper import WhisperModel
+
+        print(f"Loading faster-whisper {MODEL_NAME} on {DEVICE} ({COMPUTE_TYPE})", flush=True)
+        _model = WhisperModel(MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE)
+        print("Model ready", flush=True)
+
+    _store = JobStore(os.path.join(DATA_DIR, "jobs.sqlite"))
+    # Jobs cut short by a restart fail; queued ones stay and the worker picks them up.
+    _store.recover()
+    worker = Worker(_store, _process)
+    worker.start()
+    try:
+        yield
+    finally:
+        worker.stop()
+        _store.close()
+        _store = None
 
 
 app = FastAPI(title="LyricSync", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "HEAD", "POST"],
+    allow_methods=["GET", "HEAD", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -81,7 +112,7 @@ def root() -> dict:
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> dict:
-    return {"status": "healthy" if _model is not None else "loading"}
+    return {"status": "healthy" if _model is not None or MODEL_NAME == "none" else "loading"}
 
 
 # --- Audio ---------------------------------------------------------------------------------
@@ -93,7 +124,7 @@ def _run(cmd: list[str]) -> None:
     except subprocess.CalledProcessError as e:
         output = (e.stderr or e.stdout or "").replace("\r", "\n")
         tail = "\n".join(line for line in output.splitlines() if line.strip())[-4000:]
-        raise HTTPException(status_code=500, detail=f"{cmd[0]} failed\n{tail}") from e
+        raise PipelineError(f"{cmd[0]} failed\n{tail}") from e
 
 
 def _to_wav(src: str, dst: str, *, rate: int, mono: bool) -> None:
@@ -110,14 +141,17 @@ def _isolate_vocals(wav: str, work: str) -> str:
     _run([sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "--two-stems", "vocals", "-o", out, wav])
     stems = sorted(Path(out).rglob("vocals.wav"), key=lambda p: (len(p.parts), str(p)))
     if not stems:
-        raise HTTPException(status_code=500, detail="Demucs produced no vocals stem")
+        raise PipelineError("Demucs produced no vocals stem")
     return str(stems[0])
 
 
 def _sung_spans(wav_16k_mono: str, aggressiveness: int = 2) -> tuple[list[Span], list[Span]]:
+    import soundfile as sf
+    import webrtcvad
+
     audio, rate = sf.read(wav_16k_mono, dtype="int16", always_2d=True)
     if rate != 16000 or audio.shape[1] != 1:
-        raise HTTPException(status_code=500, detail="Voice detection needs 16 kHz mono audio")
+        raise PipelineError("Voice detection needs 16 kHz mono audio")
     pcm = audio[:, 0].tobytes()
     vad = webrtcvad.Vad(aggressiveness)
     frame = 16000 * 30 // 1000 * 2  # 30 ms of 16-bit samples
@@ -131,7 +165,7 @@ def _sung_spans(wav_16k_mono: str, aggressiveness: int = 2) -> tuple[list[Span],
 
 def _transcribe(wav_16k_mono: str, beam_size: int) -> list[Word]:
     if _model is None:
-        raise HTTPException(status_code=503, detail="The speech model is still loading")
+        raise PipelineError("The speech model is still loading", status=503)
     segments, _info = _model.transcribe(
         wav_16k_mono,
         word_timestamps=True,
@@ -180,30 +214,16 @@ def _safe_suffix(filename: Optional[str]) -> str:
     return suffix if re.fullmatch(r"\.[a-z0-9]{1,5}", suffix) else ".audio"
 
 
-# --- API -----------------------------------------------------------------------------------
+# --- Pipeline ------------------------------------------------------------------------------
 
 
-@app.post("/srt", response_class=PlainTextResponse)
-def generate_srt(
-    audio_file: UploadFile = File(...),
-    lyrics_text: str = Form(""),
-    srt_mode: str = Form("sentence"),
-    add_instrumental_tags: bool = Form(False),
-):
-    """Runs in FastAPI's thread pool (plain `def`), so the server keeps answering /health."""
-    mode = (srt_mode or "").strip().lower()
-    if mode not in ("sentence", "paragraph"):
-        raise HTTPException(status_code=400, detail="srt_mode must be 'sentence' or 'paragraph'")
-
+def align_audio(source: str, lyrics_text: str, mode: str, instrumental_tags: bool) -> str:
+    """The whole pipeline on one audio file: SRT text, empty when nothing is sung.
+    One song at a time across the synchronous route and the job worker."""
+    if not os.path.exists(source):
+        raise PipelineError("The uploaded song is no longer on the server")
     work = tempfile.mkdtemp(prefix="lyricsync-")
     try:
-        # Never use the client's file name as a path: only a checked extension survives.
-        source = os.path.join(work, "input" + _safe_suffix(audio_file.filename))
-        with open(source, "wb") as out:
-            shutil.copyfileobj(audio_file.file, out)
-        if os.path.getsize(source) > MAX_UPLOAD_MB * 1024 * 1024:
-            raise HTTPException(status_code=413, detail=f"The file is over {MAX_UPLOAD_MB} MB")
-
         with _job_lock:
             stereo = os.path.join(work, "input.wav")
             _to_wav(source, stereo, rate=44100, mono=False)
@@ -213,27 +233,122 @@ def generate_srt(
 
             heard = _transcribe(vocals, beam_size=6)
             if not heard:
-                return PlainTextResponse("", media_type="application/x-subrip")
+                return ""
 
             if lyrics_text.strip():
                 lyrics = parse_lyrics(lyrics_text)
                 if not lyrics:
-                    raise HTTPException(status_code=400, detail="The lyrics contain no words")
+                    raise PipelineError("The lyrics contain no words", status=400)
                 words = _align_lyrics(lyrics, heard, vocals, voice, work)
             else:
                 words = heard
 
         # No subtitle over an instrumental part.
-        subtitles = [s for s in segment(words, mode) if overlaps(s["start"], s["end"], voice)]  # type: ignore[arg-type]
-        if add_instrumental_tags:
+        subtitles = [s for s in segment(words, mode) if overlaps(s["start"], s["end"], voice)]  # type: ignore[arg-type,misc]
+        if instrumental_tags:
             subtitles += instrumental_segments(gaps)
-        return PlainTextResponse(build_srt(enforce_timing(subtitles)), media_type="application/x-subrip")
+        return build_srt(enforce_timing(subtitles))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+# --- API -----------------------------------------------------------------------------------
+
+
+def _check_mode(srt_mode: str) -> str:
+    mode = (srt_mode or "").strip().lower()
+    if mode not in ("sentence", "paragraph"):
+        raise HTTPException(status_code=400, detail="srt_mode must be 'sentence' or 'paragraph'")
+    return mode
+
+
+def _save_upload(audio_file: UploadFile, directory: str) -> str:
+    """Writes the upload under a random name. The client's file name is never used as a path:
+    only a checked extension survives."""
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, secrets.token_hex(8) + _safe_suffix(audio_file.filename))
+    try:
+        with open(path, "wb") as out:
+            shutil.copyfileobj(audio_file.file, out)
+    finally:
+        audio_file.file.close()
+    if os.path.getsize(path) > MAX_UPLOAD_MB * 1024 * 1024:
+        os.remove(path)
+        raise HTTPException(status_code=413, detail=f"The file is over {MAX_UPLOAD_MB} MB")
+    return path
+
+
+def _view(job: Job) -> dict:
+    assert _store is not None
+    return {
+        "id": job.id,
+        "status": job.status,
+        "position": _store.position(job.id),
+        "srt": job.srt,
+        "error": job.error,
+        "created_at": job.created_at,
+        "expires_at": job.expires_at,
+    }
+
+
+@app.post("/jobs", status_code=202)
+def create_job(
+    audio_file: UploadFile = File(...),
+    lyrics_text: str = Form(""),
+    srt_mode: str = Form("sentence"),
+    add_instrumental_tags: bool = Form(False),
+) -> dict:
+    """Queues an alignment and answers at once. Poll GET /jobs/{id} for the result."""
+    assert _store is not None
+    mode = _check_mode(srt_mode)
+    path = _save_upload(audio_file, os.path.join(DATA_DIR, "uploads"))
+    try:
+        job = _store.create(audio_path=path, mode=mode, lyrics=lyrics_text, instrumental_tags=add_instrumental_tags)
+    except QueueFull as full:
+        os.remove(path)
+        raise HTTPException(status_code=429, detail=QUEUE_FULL.format(n=full.args[0])) from full
+    return _view(job)
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str) -> dict:
+    assert _store is not None
+    job = _store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired job")
+    return _view(job)
+
+
+@app.delete("/jobs/{job_id}", status_code=204)
+def cancel_job(job_id: str) -> Response:
+    """Cancels a waiting job. A running one goes to the end but its result is thrown away."""
+    assert _store is not None
+    if not _store.cancel(job_id):
+        raise HTTPException(status_code=404, detail="Unknown, expired or finished job")
+    return Response(status_code=204)
+
+
+@app.post("/srt", response_class=PlainTextResponse)
+def generate_srt(
+    audio_file: UploadFile = File(...),
+    lyrics_text: str = Form(""),
+    srt_mode: str = Form("sentence"),
+    add_instrumental_tags: bool = Form(False),
+):
+    """Synchronous alignment, kept for older clients. Runs in FastAPI's thread pool."""
+    mode = _check_mode(srt_mode)
+    work = tempfile.mkdtemp(prefix="lyricsync-upload-")
+    try:
+        source = _save_upload(audio_file, work)
+        srt = align_audio(source, lyrics_text, mode, add_instrumental_tags)
+        return PlainTextResponse(srt, media_type="application/x-subrip")
+    except PipelineError as e:
+        raise HTTPException(status_code=e.status, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001 - reported to the client as a 500 with its message
         raise HTTPException(status_code=500, detail=str(e)) from e
     finally:
-        audio_file.file.close()
         shutil.rmtree(work, ignore_errors=True)
 
 

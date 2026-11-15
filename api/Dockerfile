@@ -9,6 +9,8 @@ RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user PATH=/home/user/.local/bin:$PATH PYTHONUNBUFFERED=1
 WORKDIR /home/user/app
+# Jobs database and queued uploads (erased when the Space restarts).
+RUN mkdir -p data
 
 COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
