@@ -12,3 +12,6 @@ lyric-sync-api/
 
 # Test audio used during development.
 public/__*
+
+# Execution notes of the plan runner (superpowers).
+.superpowers/
