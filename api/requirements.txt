@@ -1,11 +1,14 @@
+# PyTorch for CPU: the Space has no GPU, and the default build pulls ~2.5 GB of CUDA libraries.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0+cpu
+torchcodec==0.17.0+cpu
 fastapi
 uvicorn[standard]
 python-multipart
-torch
-torchcodec
 demucs
 faster-whisper>=1.1
 rapidfuzz
-webrtcvad
+# Prebuilt wheels of webrtcvad: the original package needs a C compiler to install.
+webrtcvad-wheels
 soundfile
 numpy
