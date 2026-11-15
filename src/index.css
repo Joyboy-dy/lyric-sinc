@@ -108,6 +108,46 @@
   ::selection {
     background: color-mix(in srgb, var(--playhead) 30%, transparent);
   }
+
+  /* Cursors: one per kind of action, so the pointer says what a click will do.
+     | Action                              | Cursor      | Where                                   |
+     | Activate (button, link, toggle)     | pointer     | buttons, links, switches, cue rows      |
+     | Pick a file                         | pointer     | drop zone, "Import .txt"                |
+     | Drop a file being dragged           | copy        | drop zone during a drag (dropEffect)    |
+     | Move along time                     | ew-resize   | timeline, while hovering and dragging   |
+     | Type text                           | text        | lyrics field (browser default)          |
+     | Explain on hover                    | help        | server status                           |
+     | Work running in the background      | progress    | caption frame and waveform while busy   |
+     | Not available now                   | not-allowed | any disabled control                    |
+     Anything else keeps the default arrow. */
+  :where(
+      button,
+      a[href],
+      summary,
+      select,
+      label[for],
+      input[type="file"],
+      input[type="checkbox"],
+      input[type="radio"],
+      [role="button"],
+      [role="switch"],
+      [role="radio"],
+      [role="checkbox"],
+      [role="tab"],
+      [role="option"],
+      [role="menuitem"]
+    ) {
+    cursor: pointer;
+  }
+  :where([role="slider"]) {
+    cursor: ew-resize;
+  }
+  :where([aria-busy="true"]) {
+    cursor: progress;
+  }
+  :where(:disabled, [aria-disabled="true"], [data-disabled]:not([data-disabled="false"])) {
+    cursor: not-allowed;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

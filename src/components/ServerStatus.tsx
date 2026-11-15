@@ -32,7 +32,7 @@ export function ServerStatus({ state }: { state: ServerState | "checking" }) {
       <TooltipTrigger asChild>
         <span
           tabIndex={0}
-          className="inline-flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex h-8 cursor-help items-center gap-2 rounded-md px-2 text-sm text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span aria-hidden="true" className={cn("size-2 rounded-full", DOT[state])} />
           {LABEL[state]}

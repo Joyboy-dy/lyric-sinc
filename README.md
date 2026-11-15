@@ -54,6 +54,23 @@ Sans `VITE_API_URL`, l'application fonctionne avec LRCLIB seulement et le dit da
 
 Le serveur se lance et se teste à part : voir [api/README.md](api/README.md).
 
+## Curseurs
+
+Chaque type d'action a son curseur, défini une fois pour toute l'application dans `src/index.css` :
+
+| Action | Curseur | Où |
+| --- | --- | --- |
+| Activer (bouton, lien, interrupteur, choix) | `pointer` | boutons, liens, interrupteurs, lignes de sous-titres |
+| Choisir un fichier | `pointer` | zone de dépôt, « Import .txt » |
+| Déposer un fichier en cours de glisser | `copy` | zone de dépôt pendant le glisser |
+| Se déplacer dans le temps | `ew-resize` | frise du morceau, au survol et pendant le glisser |
+| Saisir du texte | `text` | champ des paroles |
+| Explication au survol | `help` | statut du serveur |
+| Travail en cours | `progress` | cadre de sous-titres et forme d'onde pendant le traitement |
+| Indisponible pour l'instant | `not-allowed` | tout contrôle désactivé |
+
+Le reste garde la flèche normale.
+
 ## Limites connues
 
 - Le serveur gratuit tourne sur CPU : compter quelques minutes par morceau, et une ou deux de plus s'il dormait.

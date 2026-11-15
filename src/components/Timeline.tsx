@@ -93,13 +93,17 @@ export function Timeline({ peaks, duration, cues, time, active, onSeek }: Timeli
       aria-valuetext={`${formatClock(time)} of ${formatClock(duration)}`}
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
+        document.documentElement.style.cursor = "ew-resize";
         fromPointer(e);
       }}
       onPointerMove={(e) => {
         if (e.currentTarget.hasPointerCapture(e.pointerId)) fromPointer(e);
       }}
+      onLostPointerCapture={() => {
+        document.documentElement.style.cursor = "";
+      }}
       onKeyDown={onKey}
-      className="relative cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="relative touch-none rounded-md outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <canvas ref={canvasRef} aria-hidden="true" className="block h-18 w-full" />
 

@@ -178,14 +178,15 @@ export default function App() {
                   className="max-h-80 min-h-36 resize-y overflow-y-auto text-sm leading-relaxed"
                 />
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" asChild disabled={!!aligning}>
-                    <label htmlFor={ids.lyricsFile} className="cursor-pointer">
+                  <Button variant="outline" size="sm" asChild>
+                    <label htmlFor={ids.lyricsFile} aria-disabled={!!aligning || undefined} className="aria-disabled:opacity-50">
                       <FileText strokeWidth={1.5} />
                       Import .txt
                       <input
                         id={ids.lyricsFile}
                         type="file"
                         accept=".txt,.lrc,text/plain"
+                        disabled={!!aligning}
                         className="sr-only"
                         onChange={async (e) => {
                           const text = await e.target.files?.[0]?.text();

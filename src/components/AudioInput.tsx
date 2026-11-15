@@ -46,6 +46,7 @@ export function AudioInput({ file, info, disabled, onSelect, onClear }: AudioInp
       htmlFor={id}
       onDragOver={(e) => {
         e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
         setDragging(true);
       }}
       onDragLeave={() => setDragging(false)}
@@ -56,7 +57,7 @@ export function AudioInput({ file, info, disabled, onSelect, onClear }: AudioInp
         if (dropped) onSelect(dropped);
       }}
       className={cn(
-        "flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed border-input px-4 py-8 text-center transition-colors duration-150",
+        "flex flex-col items-center gap-2 rounded-lg border border-dashed border-input px-4 py-8 text-center transition-colors duration-150",
         "hover:bg-raised/60 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
         dragging && "border-playhead bg-raised",
       )}

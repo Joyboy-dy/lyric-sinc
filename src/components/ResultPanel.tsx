@@ -82,7 +82,10 @@ export function ResultPanel({ file, peaks, duration, cues, source, filename, bus
       </div>
 
       {/* Caption frame: always dark, like the video the subtitles end up on. */}
-      <div className="relative flex aspect-[16/7] min-h-36 items-end justify-center overflow-hidden rounded-xl bg-[#0f0f10] px-6 pb-[8%] ring-1 ring-black/5 dark:ring-white/8">
+      <div
+        aria-busy={busy ? true : undefined}
+        className="relative flex aspect-[16/7] min-h-36 items-end justify-center overflow-hidden rounded-xl bg-[#0f0f10] px-6 pb-[8%] ring-1 ring-black/5 dark:ring-white/8"
+      >
         {busy ? (
           <div className="absolute inset-0 grid place-items-center p-6">{busy}</div>
         ) : cues ? (
@@ -130,7 +133,7 @@ export function ResultPanel({ file, peaks, duration, cues, source, filename, bus
               onSeek={(t) => seek(t)}
             />
           ) : (
-            <div className="grid h-26 place-items-center rounded-md bg-raised text-sm text-muted-foreground">
+            <div aria-busy="true" className="grid h-26 place-items-center rounded-md bg-raised text-sm text-muted-foreground">
               Reading the waveform
             </div>
           )}
