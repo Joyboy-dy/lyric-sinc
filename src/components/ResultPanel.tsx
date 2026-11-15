@@ -15,13 +15,15 @@ interface ResultPanelProps {
   source: string | null;
   filename: string;
   busy: React.ReactNode;
+  /** How long this session is kept, under the header. */
+  note?: React.ReactNode;
 }
 
 /**
  * The subtitles played against the song: a caption frame like the finished video, the
  * timeline, and the list of cues. Everything stays in sync with the playhead.
  */
-export function ResultPanel({ file, peaks, duration, cues, source, filename, busy }: ResultPanelProps) {
+export function ResultPanel({ file, peaks, duration, cues, source, filename, busy, note }: ResultPanelProps) {
   const { playing, time, toggle, seek } = usePlayback(file);
   const list = cues ?? [];
   const active = cueAt(list, time);
@@ -80,6 +82,8 @@ export function ResultPanel({ file, peaks, duration, cues, source, filename, bus
           </div>
         )}
       </div>
+
+      {note && <div className="-mt-2 flex flex-col gap-1">{note}</div>}
 
       {/* Caption frame: always dark, like the video the subtitles end up on. */}
       <div

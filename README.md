@@ -23,7 +23,14 @@
 4. **Vérification.** Les sous-titres se lisent sur le morceau : un cadre façon vidéo affiche la ligne en cours, la forme d'onde montre chaque réplique posée sur la piste, et la liste suit la lecture. Cliquez une ligne pour l'entendre.
 5. **Copier ou télécharger** le fichier `.srt`, nommé d'après l'artiste et le titre.
 
-Rien n'est stocké : le morceau ne quitte le navigateur que pour l'alignement sur le serveur, qui le supprime après traitement.
+## Conservation 24 h
+
+Recharger ou fermer la page ne fait rien perdre pendant 24 h :
+
+- **Dans ce navigateur** (IndexedDB) : le morceau, les paroles, les réglages, les sous-titres et l'alignement en cours. Tout est effacé 24 h après le choix du morceau, ou tout de suite avec « Clear ». En navigation privée, ou si le navigateur refuse le stockage, l'application marche simplement sans mémoire.
+- **Sur le serveur** : un alignement est un traitement en file d'attente (5 au plus), suivi par un identifiant long et aléatoire. Il continue même si la page est fermée, et la page reprend son suivi au retour. Le morceau est supprimé dès la fin du traitement ; le résultat reste au plus 24 h. Un redémarrage du Space Hugging Face efface les traitements plus tôt : l'application le signale et propose de relancer.
+
+Le morceau ne quitte le navigateur que pour l'alignement sur le serveur.
 
 ## Structure
 
